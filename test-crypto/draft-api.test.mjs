@@ -46,3 +46,41 @@ test('edit path sends only resealed bytes and enforces compare-and-swap response
   await assert.rejects(updateEncryptedRelease(next, { id, expectedRevision: '7', wrappingKey,
     request: async (_path, options) => ({ id, ciphertext: options.body.ciphertext, nonce: options.body.nonce, revision: '7', changed: true }) }));
 });
+
+test('trusted minimum revision rejects reported rollback and validates before requesting', async () => {
+  const wrappingKey = await createReleaseWrappingKey();
+  let record;
+  await createEncryptedRelease(draft, { id, wrappingKey, request: async (_path, options) => {
+    record = { ...options.body, revision: '7', created: false }; return record;
+  } });
+  const request = async () => record;
+  assert.equal((await readEncryptedRelease(id, { wrappingKey, request, minimumRevision: '7' })).revision, '7');
+  await assert.rejects(readEncryptedRelease(id, { wrappingKey, request, minimumRevision: '8' }));
+  for (const minimumRevision of ['0', '-1', '01', '1.5', '9223372036854775808', 7, null]) {
+    let called = false;
+    await assert.rejects(readEncryptedRelease(id, { wrappingKey, minimumRevision, request: async () => { called = true; return record; } }));
+    assert.equal(called, false);
+  }
+});
+
+test('server revision bounds match PostgreSQL bigint including the terminal read revision', async () => {
+  const wrappingKey = await createReleaseWrappingKey();
+  let sealed;
+  await createEncryptedRelease(draft, { id, wrappingKey, request: async (_path, options) => {
+    sealed = options.body; return { ...sealed, revision: '1', created: true };
+  } });
+  const maximum = '9223372036854775807';
+  assert.equal((await readEncryptedRelease(id, { wrappingKey, minimumRevision: maximum,
+    request: async () => ({ ...sealed, revision: maximum }) })).revision, maximum);
+  for (const revision of ['9223372036854775808', '9999999999999999999', '1e2', '01', 1]) {
+    await assert.rejects(readEncryptedRelease(id, { wrappingKey, request: async () => ({ ...sealed, revision }) }));
+  }
+  let called = false;
+  await assert.rejects(updateEncryptedRelease(draft, { id, wrappingKey, expectedRevision: maximum,
+    request: async () => { called = true; } }));
+  assert.equal(called, false);
+  const result = await updateEncryptedRelease(draft, { id, wrappingKey, expectedRevision: '9223372036854775806',
+    request: async (_path, options) => ({ id, ciphertext: options.body.ciphertext, nonce: options.body.nonce,
+      revision: maximum, changed: true }) });
+  assert.equal(result.revision, maximum);
+});

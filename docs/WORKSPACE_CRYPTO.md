@@ -54,3 +54,29 @@ attachment chunks, then verifies authorized recovery and wrong-key/missing-
 chunk failure. A deployed API/object-store server-compromise exercise and
 cross-device acceptance remain pending. `local-key-store.browser.mjs` checks
 Chromium IndexedDB persistence across a page reload and account separation.
+
+## Revision validation and repository integration
+
+The client accepts returned revisions only in PostgreSQL's positive signed-bigint
+range (1 through 9223372036854775807). The terminal revision can be read but
+cannot be used as an edit precondition because incrementing it would overflow.
+Call `readEncryptedRelease(id, { wrappingKey, request, minimumRevision })` with
+a revision retained in trusted client state to reject a response reporting an
+older revision. Invalid preconditions fail before invoking the transport.
+
+This is a reported-revision consistency check, **not authenticated freshness**.
+The storage server assigns the revision outside the encrypted envelope. A fully
+malicious server can relabel an old valid ciphertext with a newer revision;
+this option cannot detect that attack or restore deleted data. It must never
+be populated from the same untrusted response it is intended to check.
+
+`test-crypto/draft-repository.integration.test.mjs` now executes the production
+`ReleaseRepository` and its migrations/RLS in embedded PostgreSQL. It verifies
+ciphertext-only stored fields and request bodies, authorized round-trip, cross-
+account denial even with a key, wrong-key/ciphertext-substitution rejection,
+exactly one concurrent CAS winner, reported rollback rejection, and storage
+failure propagation. Embedded PostgreSQL is not a deployed service or native
+pg-driver attestation. The browser test also exercises revision bounds and
+reported rollback through actual browser WebCrypto; inspect current-head CI
+for its result. Device enrollment/recovery and the private object lifecycle
+remain NFT-11/NFT-12 work; the private-workspace UI remains disabled.
