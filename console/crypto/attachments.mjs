@@ -37,17 +37,22 @@ function contextDigest(manifest) {
  * change the authenticated context during a WebCrypto or storage await. */
 export function validatePrivateManifest(input, expectedParentMessageId) {
   if (!input || Object.getPrototypeOf(input) !== Object.prototype ||
-      Object.keys(input).length !== FIELDS.length || FIELDS.some(k => !Object.hasOwn(input, k))) fail();
-  const m = Object.fromEntries(FIELDS.map(k => [k, input[k]]));
+      Reflect.ownKeys(input).length !== FIELDS.length) fail();
+  const m = {};
+  for (const field of FIELDS) {
+    const descriptor = Object.getOwnPropertyDescriptor(input, field);
+    if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) fail();
+    m[field] = descriptor.value;
+  }
+  // Reject objects before regex checks, which would otherwise call toString.
+  for (const field of FIELDS.filter(k => !['format_version', 'chunk_size_bytes', 'chunk_count', 'plaintext_size_bytes'].includes(k))) {
+    if (typeof m[field] !== 'string') fail();
+  }
   if (m.format_version !== 1 || m.profile !== ATTACHMENT_PROFILE || m.aead !== 'ALG-AES-256-GCM' ||
       m.hash !== 'ALG-SHA-256' || !ID.test(m.attachment_id) || !ID.test(m.key_id) ||
       !ID.test(m.storage_object_id) || !HEX32.test(m.attachment_key_hex) ||
       !HEX32.test(m.plaintext_hash_hex) || !HEX32.test(m.manifest_context_digest_hex) ||
       typeof m.nonce_prefix_hex !== 'string' || !/^[0-9a-f]{8}$/.test(m.nonce_prefix_hex)) fail();
-  // Regex coercion is forbidden: every text field must be an actual string.
-  for (const k of FIELDS.filter(k => !['format_version', 'chunk_size_bytes', 'chunk_count', 'plaintext_size_bytes'].includes(k))) {
-    if (typeof m[k] !== 'string') fail();
-  }
   textField(m.parent_message_id, 128);
   textField(expectedParentMessageId, 128);
   textField(m.filename, 1024);
