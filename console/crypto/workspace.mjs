@@ -34,7 +34,9 @@ function validateDraftTree(value, seen = new Set(), depth = 0, budget = { nodes:
   if (typeof value === 'number') { if (!Number.isFinite(value)) fail(); return; }
   if (!value || typeof value !== 'object' || seen.has(value) || Object.getOwnPropertySymbols(value).length) fail();
   if (Array.isArray(value)) {
-    if (value.length > 10000 || Object.keys(value).length !== value.length) fail();
+    if (Object.getPrototypeOf(value) !== Array.prototype || value.length > 10000 ||
+        Object.keys(value).length !== value.length ||
+        Object.getOwnPropertyNames(value).length !== value.length + 1) fail();
     seen.add(value);
     for (let i = 0; i < value.length; i++) {
       const descriptor = Object.getOwnPropertyDescriptor(value, String(i));

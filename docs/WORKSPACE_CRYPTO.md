@@ -80,3 +80,20 @@ pg-driver attestation. The browser test also exercises revision bounds and
 reported rollback through actual browser WebCrypto; inspect current-head CI
 for its result. Device enrollment/recovery and the private object lifecycle
 remain NFT-11/NFT-12 work; the private-workspace UI remains disabled.
+
+## Lossless input validation review
+
+Draft arrays must have the ordinary array prototype and only their indexed
+elements plus the built-in length property. Hidden serializers, custom
+prototypes and hidden extra fields are rejected before JSON serialization;
+otherwise a non-enumerable `toJSON` method could silently replace a validated
+array. Attachment manifests are copied only from enumerable own data
+descriptors. Accessors, symbols and extra hidden properties are rejected,
+and textual types are checked before regular expressions can invoke coercion.
+Regression tests assert that attacker-controlled hooks are never invoked.
+
+The production dependency audit also identified newly reported high-severity
+advisories in the old locked tree. The compatible repair pins multer 2.5.0 and
+updates locked body-parser 1.20.9, follow-redirects 1.16.2 and qs 6.16.2.
+No audit threshold or CI step is relaxed. Local lockfile audit reports zero
+vulnerabilities; the actual committed SHA still needs its own CI evidence.

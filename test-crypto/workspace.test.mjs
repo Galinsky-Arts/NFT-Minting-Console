@@ -44,3 +44,20 @@ test('rejects lossy or unsafe draft structures before any upload', async () => {
     Object.defineProperty({}, 'secret', { value: 'not serialized' }), JSON.parse('{"__proto__":{"admin":true}}')];
   for (const draft of bad) await assert.rejects(sealReleaseDraft(draft, { id: A, wrappingKey: key }));
 });
+
+test('rejects hidden array serializers and custom array prototypes without invoking them', async () => {
+  const key = await createReleaseWrappingKey();
+  let called = false;
+  const hidden = Object.defineProperty(['private.png'], 'toJSON', { value() { called = true; return []; } });
+  const custom = ['private.png'];
+  Object.setPrototypeOf(custom, Object.assign(Object.create(Array.prototype), {
+    toJSON() { called = true; return []; },
+  }));
+  const extra = Object.defineProperty(['private.png'], 'privateField', { value: 'silently lost' });
+  for (const files of [hidden, custom, extra]) {
+    await assert.rejects(sealReleaseDraft({ files }, { id: A, wrappingKey: key }), /validation/);
+  }
+  assert.equal(called, false);
+  const sealed = await sealReleaseDraft({ files: ['private.png', []] }, { id: A, wrappingKey: key });
+  assert.deepEqual(await openReleaseDraft(sealed, { expectedId: A, wrappingKey: key }), { files: ['private.png', []] });
+});

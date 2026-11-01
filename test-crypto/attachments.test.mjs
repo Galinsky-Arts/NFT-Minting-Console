@@ -160,3 +160,22 @@ test('native immutable Blob access ignores subclass size and slice substitutions
   const opened = await openAttachment(prepared.privateManifest, options.parentMessageId);
   await prepared.encryptTo(async (i, bytes) => assert.equal(new TextDecoder().decode(await opened.decryptChunk(i, bytes)), 'abc'));
 });
+
+test('manifest validation never invokes accessors or text coercion hooks', async () => {
+  const { m } = await fixture(3);
+  let invoked = false;
+  for (const field of Object.keys(m)) {
+    const getter = Object.defineProperty({ ...m }, field, { enumerable: true, get() { invoked = true; return m[field]; } });
+    assert.throws(() => validatePrivateManifest(getter, options.parentMessageId), /validation/);
+  }
+  for (const field of ['attachment_id', 'key_id', 'attachment_key_hex', 'storage_object_id', 'plaintext_hash_hex', 'manifest_context_digest_hex']) {
+    const coercion = { toString() { invoked = true; return m[field]; } };
+    assert.throws(() => validatePrivateManifest({ ...m, [field]: coercion }, options.parentMessageId), /validation/);
+  }
+  assert.equal(invoked, false);
+  const hidden = Object.defineProperty({ ...m }, 'extra', { value: 'not serialized' });
+  assert.throws(() => validatePrivateManifest(hidden, options.parentMessageId), /validation/);
+  const symbol = { ...m, [Symbol('hidden')]: 'not serialized' };
+  assert.throws(() => validatePrivateManifest(symbol, options.parentMessageId), /validation/);
+  assert.deepEqual(validatePrivateManifest({ ...m }, options.parentMessageId), m);
+});
