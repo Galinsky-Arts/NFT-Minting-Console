@@ -2,11 +2,11 @@ import { getAddress, isAddress } from 'ethers/address';
 const ZeroAddress = '0x0000000000000000000000000000000000000000';
 
 export type Role = 'owner' | 'editor' | 'viewer';
-export type Route = 'releases' | 'create' | 'readiness' | 'settings' | 'transactions' | 'launch';
+export type Route = 'releases' | 'create' | 'readiness' | 'settings' | 'transactions' | 'launch' | 'private' | 'collections' | 'marketplace' | 'help';
 export interface Configuration {
   chainId: number; chainName: string; production: boolean; productionReady: boolean;
   loginConfigured: boolean; pinningConfigured: boolean; authStore: string;
-  capabilities: { opaqueReleaseApi: boolean; deploy: boolean; mintJournal: boolean; localMint: boolean; publicLaunch?: boolean; publicPublication?: boolean };
+  capabilities: { opaqueReleaseApi: boolean; deploy: boolean; mintJournal: boolean; localMint: boolean; publicLaunch?: boolean; publicPublication?: boolean; privateWorkspace?: boolean; transferPolicy?: boolean; marketplace?: string | null; list?: boolean };
 }
 export interface Session {
   wallet: string; chainId: number; role: Role; csrf: string; expiresAt: string; idleExpiresAt: string;
@@ -16,7 +16,7 @@ export interface ReleasePage { items: ReleaseSummary[]; nextCursor: string | nul
 export interface Readiness { blockers: { id: string; milestones: string[]; description: string }[] }
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const SIGN_IN_STATEMENT = 'Sign in to NFT Console. This does not authorize publishing, minting, listing, or asset transfers.';
-export const ROUTES: Route[] = ['releases', 'create', 'readiness', 'settings', 'transactions', 'launch'];
+export const ROUTES: Route[] = ['releases', 'create', 'readiness', 'settings', 'transactions', 'launch', 'private', 'collections', 'marketplace', 'help'];
 export function routeFromHash(hash: string): Route {
   const route = hash.replace(/^#\/?/, '');
   return ROUTES.includes(route as Route) ? route as Route : 'releases';
@@ -42,7 +42,7 @@ export function configuration(value: unknown): Configuration {
     loginConfigured: v.loginConfigured === true, pinningConfigured: v.pinningConfigured === true,
     authStore: string(v.authStore, 80), capabilities: {
       opaqueReleaseApi: capabilities.opaqueReleaseApi === true, deploy: capabilities.deploy === true,
-      publicLaunch: capabilities.publicLaunch === true, publicPublication: capabilities.publicPublication === true, mintJournal: capabilities.mintJournal === true, localMint: v.chainId === 31337 && capabilities.localMint === true,
+      publicLaunch: capabilities.publicLaunch === true, publicPublication: capabilities.publicPublication === true, mintJournal: capabilities.mintJournal === true, privateWorkspace: capabilities.privateWorkspace === true, transferPolicy: capabilities.transferPolicy === true, marketplace: typeof capabilities.marketplace === 'string' ? capabilities.marketplace.slice(0, 20) : null, list: capabilities.list === true, localMint: v.chainId === 31337 && capabilities.localMint === true,
     } };
 }
 export function session(value: unknown, chainId: number): Session {

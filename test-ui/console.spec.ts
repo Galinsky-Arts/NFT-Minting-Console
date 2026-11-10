@@ -78,7 +78,7 @@ const record = { id: '11111111-1111-4111-8111-111111111111', state: 'draft', rev
 test('workspace is responsive and does not invent collections or listings', async ({ page }, testInfo) => {
   await installWallet(page); await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Every collection starts here.');
-  await expect(page.getByText('No active orders verified', { exact: true })).toBeVisible();
+  await expect(page.getByText('Listed only after independent verification', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Connect to your workspace' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.evaluate(() => { window.scrollTo(0, 0); });

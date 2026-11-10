@@ -1,4 +1,4 @@
-import {getAddress,isAddress} from 'ethers';
+import {Contract,getAddress,isAddress} from 'ethers';
 import {MarketError,fail} from './config.mjs';
 import {MarketplaceError} from './marketplaces.mjs';
 import {inspectPolicy,planPolicySteps,createdListId} from './policy.mjs';
@@ -135,6 +135,26 @@ export function installMarketRoutes(app,requireAction,{store,provider,market,mar
     res.json(await store.createAction(req.actor,'cancel',{collection:row.collection,listingId:row.id,orderHash:row.orderHash,purpose:'Cancel this signed order on Seaport so it can never be filled.'},cancelTransaction(market,row.order)));
   }));
 
+  const COLLECTION_ABI=['function name() view returns (string)','function symbol() view returns (string)','function SERIES_SIZE() view returns (uint256)','function totalMinted() view returns (uint256)',
+    'function mintingClosed() view returns (bool)','function owner() view returns (address)','function MINTER() view returns (address)','function ROYALTY_RECIPIENT() view returns (address)',
+    'function CREATOR_ROYALTY_BPS() view returns (uint96)','function getTransferValidator() view returns (address)','function ownerOf(uint256) view returns (address)','function tokenURI(uint256) view returns (string)',
+    'function workTitle(uint256) view returns (string)','function mediaSHA256(uint256) view returns (bytes32)','function rightsURI(uint256) view returns (string)','function rightsSHA256(uint256) view returns (bytes32)'];
+  /** Live inventory read straight from the collection contract (immutable settings + every minted token). */
+  app.get('/api/collections/:address',requireAction('read'),wrap(async(req,res)=>{
+    const collection=address(req.params.address),code=await provider.getCode(collection);if(code==='0x')fail('COLLECTION_NOT_DEPLOYED',404);
+    const c=new Contract(collection,COLLECTION_ABI,provider);
+    let info;try{const [name,symbol,size,minted,closed,owner,minter,royaltyRecipient,bps,validator]=await Promise.all([c.name(),c.symbol(),c.SERIES_SIZE(),c.totalMinted(),c.mintingClosed(),c.owner(),c.MINTER(),c.ROYALTY_RECIPIENT(),c.CREATOR_ROYALTY_BPS(),c.getTransferValidator()]);
+      info={collection,chainId:market.chainId,name,symbol,seriesSize:size.toString(),totalMinted:minted.toString(),mintingClosed:closed,owner,minter,royaltyRecipient,royaltyBps:Number(bps),validator};}
+    catch{fail('NOT_AN_NFT_CONSOLE_COLLECTION',409);}
+    const page=Math.max(0,Number.parseInt(String(req.query.page||'0'),10)||0),size=BigInt(info.seriesSize),start=BigInt(page*100)+1n,end=size<start+99n?size:start+99n,tokens=[];
+    for(let id=start;id<=end&&tokens.length<Number(info.totalMinted);id+=20n){
+      const ids=[];for(let j=id;j<=end&&j<id+20n;j++)ids.push(j);
+      const rows=await Promise.all(ids.map(async t=>{try{const [holder,uri,title,media,rights,rightsHash]=await Promise.all([c.ownerOf(t),c.tokenURI(t),c.workTitle(t),c.mediaSHA256(t),c.rightsURI(t),c.rightsSHA256(t)]);
+        return {tokenId:t.toString(),owner:holder,metadataURI:uri,title,mediaSHA256:media,rightsURI:rights,rightsSHA256:rightsHash};}catch{return null;}}));
+      tokens.push(...rows.filter(Boolean));
+    }
+    res.json({...info,remainingSupply:(size-BigInt(info.totalMinted)).toString(),page,tokens,readAt:new Date().toISOString(),block:await provider.getBlockNumber()});
+  }));
   async function policyState(actor,collection){
     const m=requireMarket();if(!m.validator)fail('VALIDATOR_NOT_CONFIGURED');
     const infra=await verifyMarketInfrastructure(provider,m),operators=[infra.conduit],authorizers=m.signedZone?[m.signedZone]:[];

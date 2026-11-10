@@ -10,7 +10,7 @@ const challenge = () => ({ challengeId: 'a'.repeat(64), chainId,
 const config = { chainId, chainName: 'Local test', production: false, productionReady: false, loginConfigured: true,
   pinningConfigured: false, authStore: 'memory', capabilities: { opaqueReleaseApi: false, deploy: false, mintJournal: false, localMint: false, publicLaunch: false, publicPublication: false } };
 test('reads supported configuration without enabling unfinished features', () => {
-  assert.deepEqual(configuration(config), config);
+  assert.deepEqual(configuration(config), { ...config, capabilities: { ...config.capabilities, privateWorkspace: false, transferPolicy: false, marketplace: null, list: false } });
   assert.equal(Object.hasOwn(configuration({ ...config, capabilities: { publish: true, mint: true } }).capabilities, 'mint'), false);
   assert.throws(() => configuration({ ...config, chainId: 10 }));
   for (const value of [undefined, false, 'true', 1, {}]) assert.equal(configuration({ ...config, capabilities: { publicPublication: value } }).capabilities.publicPublication, false);

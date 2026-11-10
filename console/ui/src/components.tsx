@@ -75,10 +75,12 @@ export function Modal({ title, children, close }: { title: string; children: Rea
   </dialog>;
 }
 export const navigation: { route: Route; label: string; icon: string }[] = [
-  { route: 'releases', label: 'Collections', icon: 'grid' }, { route: 'create', label: 'Create release', icon: 'plus' },
-  { route: 'launch', label: 'Deploy & mint', icon: 'plus' },
+  { route: 'releases', label: 'Dashboard', icon: 'grid' }, { route: 'private', label: 'Private workspace', icon: 'lock' },
+  { route: 'create', label: 'Plan collection', icon: 'plus' },
+  { route: 'launch', label: 'Publish, deploy & mint', icon: 'plus' },
   { route: 'transactions', label: 'Mint transactions', icon: 'layers' },
-  { route: 'readiness', label: 'Release readiness', icon: 'check' }, { route: 'settings', label: 'Workspace settings', icon: 'settings' },
+  { route: 'collections', label: 'Collections & policy', icon: 'layers' }, { route: 'marketplace', label: 'Marketplace', icon: 'wallet' },
+  { route: 'readiness', label: 'Release readiness', icon: 'check' }, { route: 'help', label: 'Help & tutorials', icon: 'info' }, { route: 'settings', label: 'Workspace settings', icon: 'settings' },
 ];
 export function Navigation({ route, close }: { route: Route; close?: () => void }) {
   return <nav aria-label="Workspace">{navigation.map(item => <a key={item.route} href={`#/${item.route}`} aria-current={route === item.route ? 'page' : undefined} onClick={close}><Icon name={item.icon}/><span>{item.label}</span></a>)}</nav>;

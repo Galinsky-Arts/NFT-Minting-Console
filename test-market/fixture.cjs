@@ -4,7 +4,7 @@ const fs = require('node:fs'), path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const json = p => JSON.parse(fs.readFileSync(path.join(root, p), 'utf8'));
 async function deployMarketStack(hre, deployer) {
-  const {ContractFactory, Contract, getAddress} = hre.ethers;
+  const {ContractFactory, getAddress} = hre.ethers;
   if (Number(await hre.network.provider.send('eth_chainId')) !== 31337) throw new Error('Local chain only.');
   const deploy = async (art, args = []) => { const c = await new ContractFactory(art.abi, art.bytecode, deployer).deploy(...args); await c.waitForDeployment(); return c; };
   const v = name => json(`artifacts-validator/${name}.json`);
