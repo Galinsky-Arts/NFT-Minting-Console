@@ -161,3 +161,43 @@ export async function openAttachment(input, expectedParentMessageId) {
     } finally { digest.destroy(); }
   } });
 }
+
+/** Resume a previously prepared upload after interruption or reload. The whole Blob is re-hashed first and
+ * must match the authenticated private manifest exactly, so any re-encrypted chunk is byte-identical to the
+ * ciphertext produced originally (same key, nonce and plaintext): no new plaintext is ever sealed under a
+ * used nonce. `skip(index)` omits chunks the store has already acknowledged. One-shot like encryptTo. */
+export async function resumeAttachment(blob, input, expectedParentMessageId, { signal } = {}) {
+  if (!(blob instanceof Blob)) fail();
+  const m = validatePrivateManifest(input, expectedParentMessageId);
+  const size = Object.getOwnPropertyDescriptor(Blob.prototype, 'size').get.call(blob);
+  if (size !== m.plaintext_size_bytes) fail();
+  const read = (start, end) => Blob.prototype.arrayBuffer.call(Blob.prototype.slice.call(blob, start, end));
+  const digest = sha256.create();
+  try {
+    for (let index = 0; index < m.chunk_count; index++) {
+      abort(signal);
+      const bytes = new Uint8Array(await read(index * m.chunk_size_bytes, index * m.chunk_size_bytes + position(m, index)));
+      try { digest.update(bytes); } finally { bytes.fill(0); }
+    }
+    if (hex(digest.digest()) !== m.plaintext_hash_hex) fail();
+  } finally { digest.destroy(); }
+  let used = false;
+  return Object.freeze({ privateManifest: m, async encryptTo(writeCiphertext, { skip = () => false } = {}) {
+    if (used || typeof writeCiphertext !== 'function' || typeof skip !== 'function') fail();
+    used = true;
+    const key = await importKey(m, 'encrypt');
+    let written = 0;
+    for (let index = 0; index < m.chunk_count; index++) {
+      abort(signal);
+      if (await skip(index)) continue;
+      const bytes = new Uint8Array(await read(index * m.chunk_size_bytes, index * m.chunk_size_bytes + position(m, index)));
+      try {
+        if (bytes.length !== position(m, index)) fail();
+        const ciphertext = new Uint8Array(await globalThis.crypto.subtle.encrypt(parameters(m, index), key, bytes));
+        abort(signal);
+        await writeCiphertext(index, ciphertext); written++;
+      } finally { bytes.fill(0); }
+    }
+    return Object.freeze({ ciphertextComplete: true, chunks: m.chunk_count, written });
+  } });
+}

@@ -16,7 +16,6 @@ const NFT_ABI=['function ownerOf(uint256) view returns (address)','function isAp
   'function name() view returns (string)','function symbol() view returns (string)','function ROYALTY_RECIPIENT() view returns (address)','function CREATOR_ROYALTY_BPS() view returns (uint96)'];
 export const seaportIface=new Interface(SEAPORT_ABI),nftIface=new Interface(NFT_ABI);
 const MAX_DURATION=180n*86400n;
-const uint=(v,code)=>{if(typeof v!=='string'||!/^(?:0|[1-9][0-9]{0,77})$/.test(v))fail(code);return BigInt(v);};
 export const domainFor=market=>({name:'Seaport',version:market.seaportVersion,chainId:market.chainId,verifyingContract:market.seaport});
 export const orderHashOf=parameters=>TypedDataEncoder.from(EIP712_TYPES).hash(parameters);
 /** Independently verifies the Seaport deployment, its EIP-712 domain and the marketplace conduit channel. */

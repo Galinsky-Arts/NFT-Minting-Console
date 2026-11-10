@@ -19,6 +19,12 @@ import {installCostQuoteRoutes} from './launch/quote.mjs';
 import {installPublicationWorkbench} from './publication/workbench-http.mjs';
 import {checkPublicationSchema} from './publication/workbench-schema.mjs';
 import {localMintMode} from './operations/local-mode.mjs';
+import {marketConfig} from './market/config.mjs';
+import {MarketStore} from './market/store.mjs';
+import {OpenSeaMarketplace} from './market/marketplaces.mjs';
+import {installMarketRoutes} from './market/http.mjs';
+import {installPrivateRoutes} from './private/http.mjs';
+import {PrivateStore} from './private/store.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const chainRegistry=JSON.parse(fs.readFileSync(path.join(root,'config/chains.json'),'utf8'));
 const blockedFeatures=Object.freeze([
@@ -30,7 +36,7 @@ const blockedFeatures=Object.freeze([
   {id:'production-evidence',milestones:['NFT-30','NFT-31','NFT-32','NFT-33','NFT-34','NFT-35','NFT-36'],description:'Durable database and first-run setup are implemented. Live runtime configuration, a verified user mint and real-sale acceptance remain separate checks. External human review is deferred by owner policy.'},
 ]);
 const closed=(res,code,error)=>res.status(409).json({code,error,productionReady:false});
-export function createApp({env=process.env,authService,launchContentOptions}={}) {
+export function createApp({env=process.env,authService,launchContentOptions,marketplaceOverride}={}) {
   const app=express(),production=env.NODE_ENV==='production';
   if(production&&(env.NFT_PUBLIC_LAUNCH!=='1'||authService))throw new Error('Production startup is blocked without the configured public launch scope and durable authentication.');
   const port=Number(env.PORT||3000);if(!Number.isInteger(port)||port<0||port>65535)throw new Error('Invalid PORT.');
@@ -41,6 +47,9 @@ export function createApp({env=process.env,authService,launchContentOptions}={})
   const publicLaunch=publicLaunchMode(env,chainId,origin,roles);
   if(launchContentOptions&&!(env.NODE_ENV==='test'&&env.NFT_UI_FIXTURE==='1'&&chainId===31337&&origin.startsWith('http://127.0.0.1:')))throw new Error('Content transport injection is limited to the disposable browser fixture.');
   const launchArtifact=publicLaunch?loadCollectionArtifact():null;
+  if(marketplaceOverride&&!(env.NODE_ENV==='test'&&chainId===31337))throw new Error('Marketplace injection is limited to disposable local tests.');
+  const market=marketConfig(env,chainId);
+  const marketplace=marketplaceOverride||(market.openseaApi&&env.OPENSEA_API_KEY?new OpenSeaMarketplace({apiKey:env.OPENSEA_API_KEY,base:market.openseaApi.base,chain:market.openseaApi.chain}):null);
   const factoryValue=env.DEPLOYMENT_FACTORY_ADDRESS||'';
   if(factoryValue&&!ethers.isAddress(factoryValue))throw new Error('Invalid DEPLOYMENT_FACTORY_ADDRESS.');
   const factoryAddress=factoryValue?ethers.getAddress(factoryValue):null;
@@ -52,7 +61,8 @@ export function createApp({env=process.env,authService,launchContentOptions}={})
     if(auth.origin!==origin||auth.chainId!==chainId)throw new Error('Authentication realm does not match server configuration.');
   }catch(error){provider?.destroy();void persistence?.close();throw error;}
   const launchJournal=persistence&&publicLaunch?new LaunchJournal(persistence.repository):null;
-  const ready=(persistence?.ready||Promise.resolve()).then(()=>launchJournal?.checkSchema()).then(()=>launchJournal&&env.PINATA_JWT?checkPublicationSchema(persistence.repository):undefined);
+  const marketStore=persistence?new MarketStore(persistence.repository):null,privateStore=persistence?new PrivateStore(persistence.repository):null;
+  const ready=(persistence?.ready||Promise.resolve()).then(()=>marketStore?.checkSchema()).then(()=>launchJournal?.checkSchema()).then(()=>launchJournal&&env.PINATA_JWT?checkPublicationSchema(persistence.repository):undefined);
   app.disable('x-powered-by');app.set('trust proxy',false);
   app.use((_req,res,next)=>{
     res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('Cross-Origin-Resource-Policy','same-origin');
@@ -62,12 +72,15 @@ export function createApp({env=process.env,authService,launchContentOptions}={})
   app.use('/api',(_req,res,next)=>{ready.then(()=>next(),()=>res.status(503).json({error:'Configured database authorization is unavailable. No memory fallback is permitted.',code:'database_unavailable'}));});
   app.use('/api/launch/mint',express.json({limit:'1536kb',strict:true}));
   app.use('/api/launch/quote',express.json({limit:'8mb',strict:true}));
+  app.use('/api/private/records',express.json({limit:'1600kb',strict:true}));
+  app.use('/api/private/blobs/:id/chunks/:index',express.raw({type:'application/octet-stream',limit:'8300kb'}));
   app.use(express.json({limit:'64kb',strict:true}));
   const requireAction=installAuthRoutes(app,auth,{production});
   if(persistence){installReleaseRoutes(app,requireAction,persistence.repository);installJournalRoutes(app,requireAction,persistence.journal,provider);}
   if(launchJournal){installLaunchRoutes(app,requireAction,{journal:launchJournal,provider,artifact:launchArtifact,enabled:publicLaunch,chainId,contentOptions:launchContentOptions});installCostQuoteRoutes(app,requireAction,{journal:launchJournal,provider,artifact:launchArtifact,enabled:publicLaunch,chainId,contentOptions:launchContentOptions});}
+  if(marketStore){installMarketRoutes(app,requireAction,{store:marketStore,provider,market,marketplace});installPrivateRoutes(app,requireAction,{store:privateStore});}
   if(launchJournal&&env.PINATA_JWT)installPublicationWorkbench(app,requireAction,{repository:persistence.repository,jwt:env.PINATA_JWT,contentOptions:launchContentOptions});
-  app.get('/api/config',(_req,res)=>res.json({chainId,chainSlug:profile.slug,chainName:profile.name,production:profile.production,deploymentFactory:factoryAddress,pinningReady:false,pinningConfigured:Boolean(env.PINATA_JWT),loginConfigured:roles.size>0&&Boolean(provider),validator:env.TRANSFER_VALIDATOR_ADDRESS||profile.validator,signedZone:env.OPENSEA_SIGNED_ZONE||profile.signedZone,productionReady:false,authStore:persistence?'postgresql':'development-memory',capabilities:{publicPublication:Boolean(launchJournal&&env.PINATA_JWT),publicLaunch,localMint,mintJournal:Boolean(persistence),privateDrafts:false,opaqueReleaseApi:Boolean(persistence),publish:false,mint:false,list:false,deploy:chainId!==1&&Boolean(factoryAddress)}}));
+  app.get('/api/config',(_req,res)=>res.json({chainId,chainSlug:profile.slug,chainName:profile.name,production:profile.production,deploymentFactory:factoryAddress,pinningReady:false,pinningConfigured:Boolean(env.PINATA_JWT),loginConfigured:roles.size>0&&Boolean(provider),validator:env.TRANSFER_VALIDATOR_ADDRESS||profile.validator,signedZone:env.OPENSEA_SIGNED_ZONE||profile.signedZone,productionReady:false,authStore:persistence?'postgresql':'development-memory',capabilities:{publicPublication:Boolean(launchJournal&&env.PINATA_JWT),publicLaunch,localMint,mintJournal:Boolean(persistence),privateDrafts:Boolean(privateStore),privateWorkspace:Boolean(privateStore),transferPolicy:Boolean(marketStore&&market.available&&market.validator&&provider),marketplace:marketStore&&market.available&&marketplace?marketplace.name:null,opaqueReleaseApi:Boolean(persistence),publish:false,mint:false,list:Boolean(marketStore&&market.available&&marketplace),deploy:chainId!==1&&Boolean(factoryAddress)}}));
   app.get('/api/health',(_req,res)=>res.json({ok:true,productionReady:false}));
   app.get('/api/launch-readiness',requireAction('read'),(_req,res)=>res.json({productionReady:false,mintingEvidence:'not-verified',listingEvidence:'not-verified',blockers:blockedFeatures,authentication:'software-integration-accepted',storage:persistence?'durable-configured-not-production-accepted':'development-memory',note:'These are software gates, not a live wallet inventory or security certification.'}));
   app.get('/api/artifact',requireAction('deploy'),(_req,res)=>{
