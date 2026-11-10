@@ -18,3 +18,6 @@ cache-safe/
 console/dist/
 test-results/
 playwright-report/
+artifacts-market/
+cache-market/
+artifacts-validator/
