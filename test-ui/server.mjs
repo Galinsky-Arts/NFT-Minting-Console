@@ -13,6 +13,8 @@ import {publicBrowserFetch} from './launch-content.mjs';
 import {fixturePublicationFetch,startPublicationFixture} from './publication-fixture.mjs';
 import { testWallets } from './fixtures.mjs';
 import { setupBrowserDatabase } from './database.mjs';
+import { startMarketFixture } from './market-fixture.mjs';
+import { FixtureMarketplace } from '../console/market/marketplaces.mjs';
 
 if (hre.network.name !== 'hardhat' || hre.network.config.forking) throw new Error('Browser acceptance refuses nonlocal or forked networks.');
 if (process.env.NFT_UI_FIXTURE !== '1') throw new Error('Browser fixture must be started explicitly by the test harness.');
@@ -32,7 +34,7 @@ if (getAddress(await proxy.getAddress()) !== SAFE) throw new Error('Unexpected S
 const safe = new Contract(SAFE, safeArtifact.abi, deployer);
 await (await safe.setup([OWNER, VIEWER, EDITOR], 2, ZeroAddress, '0x', await handler.getAddress(), ZeroAddress, 0, ZeroAddress)).wait();
 if (await safe.VERSION() !== '1.4.1' || await safe.getThreshold() !== 2n) throw new Error('Safe fixture must be upstream 1.4.1 with a 2-of-3 threshold.');
-const methods = new Set(['eth_chainId', 'net_version', 'eth_blockNumber', 'eth_getCode', 'eth_call', 'eth_getBlockByNumber', 'eth_getTransactionByHash', 'eth_getTransactionReceipt','eth_getTransactionCount','eth_estimateGas','eth_gasPrice','eth_getBalance']);
+const methods = new Set(['eth_chainId', 'net_version', 'eth_blockNumber', 'eth_getCode', 'eth_call', 'eth_getBlockByNumber', 'eth_getTransactionByHash', 'eth_getTransactionReceipt','eth_getTransactionCount','eth_estimateGas','eth_gasPrice','eth_getBalance','eth_getLogs']);
 const rpc = http.createServer(async (request, response) => {
   const chunks = []; let bytes = 0;
   try {
@@ -60,16 +62,19 @@ rpc.listen(0, '127.0.0.1'); await once(rpc, 'listening');
 const rpcUrl = `http://127.0.0.1:${rpc.address().port}`;
 const provider = new JsonRpcProvider(rpcUrl, undefined, { batchMaxCount: 1, cacheTimeout: -1 });
 const roles = new Map([[OWNER.toLowerCase(), 'owner'], [VIEWER.toLowerCase(), 'viewer'],
-  [EDITOR.toLowerCase(), 'editor'], [SAFE.toLowerCase(), 'owner'], [testWallets[3].address.toLowerCase(), 'owner'], [testWallets[4].address.toLowerCase(), 'owner'], [testWallets[5].address.toLowerCase(), 'owner'], [testWallets[6].address.toLowerCase(), 'owner'], [testWallets[7].address.toLowerCase(), 'owner']]);
+  [EDITOR.toLowerCase(), 'editor'], [SAFE.toLowerCase(), 'owner'], [testWallets[3].address.toLowerCase(), 'owner'], [testWallets[4].address.toLowerCase(), 'owner'], [testWallets[5].address.toLowerCase(), 'owner'], [testWallets[6].address.toLowerCase(), 'owner'], [testWallets[7].address.toLowerCase(), 'owner'], ...[8,9,10,11].map(i => [testWallets[i].address.toLowerCase(), 'owner'])]);
 const database = await setupBrowserDatabase(roles);
 const stopMintFixture = await startMintFixture(hre);
 const stopPublicationFixture = await startPublicationFixture();
+const marketFixture = await startMarketFixture(hre);
+const marketplace = new FixtureMarketplace({ feeRecipient: testWallets[1].address, feeBps: 100 });
 const contentFetch=async(url,options)=>{const old=await publicBrowserFetch(url);return old.status===200?old:fixturePublicationFetch(url,options);};
 const auth = createAuthService({ origin: ORIGIN, chainId: 31337, roles: () => roles,
   checksumAddress: getAddress, store: database.store, verifyWallet: createWalletVerifier(provider) });
 const app = createApp({ env: { NODE_ENV: 'test', PORT: '4173', PUBLIC_ORIGIN: ORIGIN, CHAIN_ID: '31337',
-  NFT_UI_FIXTURE:'1',NFT_PUBLIC_LAUNCH:'1',NFT_LOCAL_MINT_REHEARSAL: '1', ADMIN_WALLETS: `${OWNER},${SAFE},${testWallets[3].address},${testWallets[4].address},${testWallets[5].address},${testWallets[6].address},${testWallets[7].address}`, VIEWER_WALLETS: VIEWER, EDITOR_WALLETS: EDITOR,
-  PINATA_JWT:'synthetic-browser-publication-only',RPC_URL: rpcUrl, DATABASE_URL: database.runtimeUrl }, authService: auth,launchContentOptions:{fetchImpl:contentFetch} });
+  NFT_UI_FIXTURE:'1',NFT_PUBLIC_LAUNCH:'1',NFT_LOCAL_MINT_REHEARSAL: '1', ADMIN_WALLETS: `${OWNER},${SAFE},${testWallets[3].address},${testWallets[4].address},${testWallets[5].address},${testWallets[6].address},${testWallets[7].address},${[8,9,10,11].map(i => testWallets[i].address).join(',')}`, VIEWER_WALLETS: VIEWER, EDITOR_WALLETS: EDITOR,
+  PINATA_JWT:'synthetic-browser-publication-only',RPC_URL: rpcUrl, DATABASE_URL: database.runtimeUrl,
+  MARKET_SEAPORT: marketFixture.market.seaport, MARKET_CONDUIT_CONTROLLER: marketFixture.market.conduitController, MARKET_CONDUIT_KEY: marketFixture.market.conduitKey, MARKET_VALIDATOR: marketFixture.market.validator, MARKET_FIXTURE: '1' }, authService: auth,launchContentOptions:{fetchImpl:contentFetch}, marketplaceOverride: marketplace });
 await app.locals.ready;
 const server = app.listen(4173, '127.0.0.1'); await once(server, 'listening');
 const setupServers=[];
@@ -82,6 +87,6 @@ async function stop() {
   for(const {runtime,instance} of setupServers){instance.closeAllConnections();await new Promise(resolve=>instance.close(resolve));await runtime.locals.close();}
   server.closeAllConnections(); rpc.closeAllConnections();
   await new Promise(resolve => server.close(resolve));await new Promise(resolve => rpc.close(resolve));
-  await stopPublicationFixture();await stopMintFixture(); provider.destroy(); await app.locals.close(); await database.close(); process.exit(0);
+  await stopPublicationFixture();await stopMintFixture();await marketFixture.stop(); provider.destroy(); await app.locals.close(); await database.close(); process.exit(0);
 }
 process.once('SIGTERM', () => void stop());process.once('SIGINT', () => void stop());

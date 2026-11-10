@@ -13,6 +13,7 @@ import {HASH,statusText} from './mint-model';
 import {PresetControls} from './PresetControls';
 import {CostReview} from './CostReview';
 import {PublicationWorkbench} from './PublicationWorkbench';
+import {takeHandoff} from './handoff';
 import './publication.css';
 interface Props {current:Session|null;config:Configuration;connect:()=>void;expired:()=>void;walletProvider:()=>WalletProvider|null}
 const keys=['name','symbol','seriesSize','royaltyBps','owner','minter','royaltyRecipient'] as const;
@@ -26,6 +27,7 @@ function LaunchWorkspace({current,config,expired,walletProvider}:Props&{current:
   const [rows,setRows]=useState<LaunchOperation[]>([]),[selected,setSelected]=useState<LaunchOperation|null>(null),[review,setReview]=useState<LaunchReview|null>(null);
   const [error,setError]=useState(''),[busy,setBusy]=useState(''),[returnedHash,setReturnedHash]=useState(''),[recovery,setRecovery]=useState(''),[approved,setApproved]=useState(false);
   const [configInput,setConfig]=useState<CollectionConfig>({name:'',symbol:'',seriesSize:'',royaltyBps:'600',owner:current.wallet,minter:current.wallet,royaltyRecipient:current.wallet});
+  const [handoffQueue,setHandoffQueue]=useState(()=>takeHandoff());
   const [publishedWorks,setPublishedWorks]=useState<unknown[]>([]);
   const [listingPreference,setListingPreference]=useState<string|null>(null);
   const [deployConsent,setDeployConsent]=useState(false),[deploymentId,setDeploymentId]=useState(''),[bundle,setBundle]=useState<unknown[]|null>(null),[mintConsent,setMintConsent]=useState(false),[cursor,setCursor]=useState<string|null>(null);
@@ -53,7 +55,7 @@ function LaunchWorkspace({current,config,expired,walletProvider}:Props&{current:
   const deployments=rows.filter(x=>x.plan.kind==='deploy'&&x.state==='verified');
   return <div className="transaction-workspace">
     <Notice><strong>{config.chainId===1?'Ethereum mainnet - real network fees':'Test network - test ETH'}</strong><p>This flow uses finalized public NFT materials. Collection settings and transaction fields are stored in your launch history and written publicly on chain when signed. A verified mint does not create a marketplace listing.</p></Notice>
-    {owner&&config.capabilities.publicPublication&&<PublicationWorkbench current={current} expired={expired} onUse={works=>{const next=[...publishedWorks,...works];const ids=next.map(w=>(w as {work:{tokenId:string}}).work.tokenId);if(new Set(ids).size!==ids.length)throw new Error('That token ID is already selected. Clear the selection before replacing it.');setPublishedWorks(next);if(next.length<=10){setBundle(next);setMintConsent(false);}}}/>}
+    {owner&&config.capabilities.publicPublication&&<>{handoffQueue.length>1&&<div className="notice" role="status">{handoffQueue.length} works were selected in your private workspace. Review them one at a time. <button className="text-button" onClick={()=>setHandoffQueue(q=>q.slice(1))}>Next selected work</button></div>}<PublicationWorkbench key={handoffQueue[0]?.tokenId||'manual'} initial={handoffQueue[0]||null} current={current} expired={expired} onUse={works=>{const next=[...publishedWorks,...works];const ids=next.map(w=>(w as {work:{tokenId:string}}).work.tokenId);if(new Set(ids).size!==ids.length)throw new Error('That token ID is already selected. Clear the selection before replacing it.');setPublishedWorks(next);if(next.length<=10){setBundle(next);setMintConsent(false);}}}/></>}
     {publishedWorks.length>0&&<section className="panel"><h2>Verified artwork selected for this release</h2><p>{publishedWorks.length} NFT(s) selected. Total-cost review includes all of them. Mint one batch of up to ten at a time.</p>{Array.from({length:Math.ceil(publishedWorks.length/10)},(_,i)=><button key={i} className="button secondary" disabled={!!busy} onClick={()=>{setBundle(publishedWorks.slice(i*10,i*10+10));setMintConsent(false);}}>Use mint batch {i+1}</button>)}<button className="text-button" disabled={!!busy} onClick={()=>{setPublishedWorks([]);setBundle(null);setMintConsent(false);}}>Clear this selection (saved public files remain)</button></section>}
     {owner&&<CostReview current={current} config={config} collection={configInput} deployments={deployments} expired={expired} providedWorks={publishedWorks}/>}
     {busy&&<p role="status">{busy}</p>}{error&&<Notice error>{error}</Notice>}

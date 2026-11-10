@@ -40,8 +40,21 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Compile and verify the pinned actual Safe
         run: npm run test:safe
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: limitbreakinc/creator-token-transfer-validator
+          ref: 59adb8b36ab0256c7430b017b1c9f8b4841d6e1e
+          path: vendor/creator-token-transfer-validator
+          submodules: recursive
+          persist-credentials: false
       - name: Compile the actual collection used in browser mints
         run: npm run compile
+      - name: Real Seaport 1.6 + pinned LB v5 validator marketplace/policy integration
+        env:
+          HARDHAT_SOLC_PATH: ''
+        run: |
+          SOLC=$(find ~/.cache/hardhat-nodejs -name 'solc-linux-amd64-v0.8.24*' -type f | head -1)
+          HARDHAT_SOLC_PATH="$SOLC" npm run test:market
       - run: npm run build:ui
       - run: npm run typecheck:ui
       - run: npm run test:ui:model

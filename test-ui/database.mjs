@@ -22,7 +22,7 @@ export async function setupBrowserDatabase(roles) {
   const password = randomBytes(32).toString('hex');
   await admin.connect();
   try {
-    if (Number((await admin.query('SHOW server_version_num')).rows[0].server_version_num) < 180000) {
+    if (Number((await admin.query('SHOW server_version_num')).rows[0].server_version_num) < (process.env.NFT_TEST_ALLOW_POSTGRES_16 === 'yes' && !process.env.CI ? 160000 : 180000)) {
       throw new Error('Browser acceptance requires PostgreSQL 18.');
     }
     const existing = await admin.query("SELECT to_regnamespace('nft_console') AS existing");

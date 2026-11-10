@@ -5,11 +5,12 @@ import {LocalPublicationPreview} from './LocalPublicationPreview';
 import type {Session} from './model';
 import {describeFile,publicRow,publicHistory,uploadWithCapability} from './publication-client';
 import type {FileKind,PublicFile,PublicSlot,PublicWorkRow} from './publication-client';
-interface Props {current:Session;expired:()=>void;onUse:(works:unknown[])=>void}
+import type {PublicationHandoff} from './handoff';
+interface Props {current:Session;expired:()=>void;onUse:(works:unknown[])=>void;initial?:PublicationHandoff|null}
 interface SavedWork {id:string;title:string;tokenId:string}
 const kinds=['image','rights','media'] as const;
 const accept:Record<string,string>={image:'.png,.jpg,.jpeg,.webp,.gif',rights:'.md,.txt,.pdf',media:'.mp4,.webm,.mp3,.m4a'};
-export function PublicationWorkbench({current,expired,onUse}:Props){
+export function PublicationWorkbench({current,expired,onUse,initial}:Props){
   const [fields,setFields]=useState({tokenId:'',title:'',description:'',rightsScope:'token' as 'token'|'collection'}),[files,setFiles]=useState<Partial<Record<FileKind,File>>>({}),[descriptions,setDescriptions]=useState<Partial<Record<FileKind,PublicFile>>>({}),[consent,setConsent]=useState(false),[row,setRow]=useState<PublicWorkRow|null>(null),[history,setHistory]=useState<SavedWork[]>([]),[cursor,setCursor]=useState<string|null>(null),[selected,setSelected]=useState(''),[busy,setBusy]=useState(''),[error,setError]=useState(''),[cid,setCid]=useState<Record<string,string>>({}),[retry,setRetry]=useState<Record<string,boolean>>({}),[message,setMessage]=useState('');
   const working=useRef(false),lifetime=useRef<AbortController|null>(null),version=useRef(0),creationId=useRef(crypto.randomUUID());
   useEffect(()=>{const c=new AbortController();lifetime.current=c;return()=>{c.abort();version.current++;};},[]);
@@ -19,6 +20,7 @@ export function PublicationWorkbench({current,expired,onUse}:Props){
   function received(value:unknown,expectedId?:string){const next=publicRow(value,expectedId);if(active()){setRow(next);setSelected(next.id);}return next;}
   async function refresh(after?:string){const value=publicHistory(await api('/api/publication/works'+(after?'?after='+after:''),{signal:lifetime.current?.signal}));if(active()){setHistory(old=>after?[...old,...value.items]:value.items);setCursor(value.nextCursor);}}
   useEffect(()=>{void refresh().catch(()=>{if(active())setError('Public publication history is unavailable.');});},[]);
+  useEffect(()=>{if(!initial)return;setFields(f=>({...f,tokenId:initial.tokenId,title:initial.title,description:initial.description}));void (async()=>{for(const k of ['image','rights','media'] as const){const file=initial.files[k];if(file&&active())await choose(k,file);}if(active())setMessage('This work was decrypted locally from your private workspace and placed here for review. Nothing has been published.');})();},[initial]);
   async function choose(kind:FileKind,file:File|undefined){if(!file)return;const request=++version.current;await task('Reading and hashing the selected file locally',async()=>{const d=await describeFile(kind,file,lifetime.current?.signal);if(!active()||request!==version.current)return;const expected=row?.files.find(f=>f.kind===kind);if(expected&&(expected.sha256!==d.sha256||expected.byteLength!==d.byteLength||expected.name!==d.name||expected.mime!==d.mime))throw new Error('This saved public work needs the exact originally reviewed '+kind+' file. Create a new work for different bytes.');setFiles(old=>({...old,[kind]:file}));setDescriptions(old=>({...old,[kind]:d}));setConsent(false);});}
   async function create(){await task('Saving the reviewed public file commitments',async()=>{if(!descriptions.image||!descriptions.rights||!consent)return;received(await post('',{version:1,id:creationId.current,...fields,files:kinds.flatMap(kind=>descriptions[kind]?[descriptions[kind]]:[]),publicDisclosureConfirmed:true}),creationId.current);await refresh();});}
   async function upload(file:PublicSlot){await task('Uploading '+file.kind+' and verifying its exact public bytes',async()=>{
