@@ -12,7 +12,7 @@ interface Review { marketplace: string; indexed: boolean; priceWei: string; paym
 interface Listing { id: string; chainId: number; collection: string; tokenId: string; seller: string; orderHash: string; state: string; review: Review; signed: boolean; submission: Record<string, unknown> | null; observation: { chainState?: string; chain?: Record<string, unknown>; marketplace?: { status: string; matches?: boolean } } | null; settlement: { transactionHash: string; buyer: string; currentOwner: string; royaltyPaidWei: string; expectedRoyaltyWei: string; royaltyEvidence: string; payments: { recipient: string; amountWei: string }[] } | null; cancelTx: string | null; updatedAt: string }
 interface MarketInfo { configured: boolean; name?: string; marketplace?: string | null; openSeaConfigured?: boolean; note?: string }
 interface Inspection { market: { name: string; operator: string }; token: { owner: string; sellerOwns: boolean; approved: boolean; royalty: { recipient: string; amountWei: string } | null; policy: { status: string } } }
-interface Prepared { listing: Listing; typedData: TypedOrder; approvalTransaction: WalletTransaction | null }
+interface Prepared { listing: Listing; typedData: TypedOrder; approvalTransaction: WalletTransaction | null; sellerIsContract?: boolean }
 interface Props { current: Session | null; config: Configuration; connect: () => void; expired: () => void; walletProvider: () => WalletProvider | null }
 
 export const STATE_LABELS: Record<string, [string, string]> = {
@@ -43,6 +43,7 @@ function MarketplaceWorkspace({ current, config, expired, walletProvider }: Prop
   const [info, setInfo] = useState<MarketInfo | null>(null), [listings, setListings] = useState<Listing[]>([]);
   const [form, setForm] = useState({ collection: '', tokenId: '', price: '', days: '30' });
   const [inspection, setInspection] = useState<Inspection | null>(null), [prepared, setPrepared] = useState<Prepared | null>(null);
+  const [safeSignature, setSafeSignature] = useState('');
   const [busy, setBusy] = useState(''), [error, setError] = useState(''), [status, setStatus] = useState(''), [acknowledged, setAcknowledged] = useState(false);
   const csrf = current.csrf, owner = current.role === 'owner';
   const guard = useCallback((e: unknown) => { if (e instanceof ApiError && e.status === 401) expired(); setError(message(e)); }, [expired]);
@@ -129,10 +130,19 @@ function MarketplaceWorkspace({ current, config, expired, walletProvider }: Prop
       {prepared.approvalTransaction && <div className="mint-confirmation"><h3>Step 1: Approve the marketplace operator</h3>
         <p>This wallet transaction lets the Seaport operator <span className="mono">{short(prepared.listing.review.operator)}</span> transfer tokens you own in this collection, only when a buyer fills an order you signed. It costs network gas. You can revoke it later.</p>
         <button className="button secondary" disabled={!!busy} onClick={approve}>{busy === 'approve' ? 'Waiting for wallet…' : 'Approve in wallet'}</button></div>}
-      <div className="mint-confirmation"><h3>{prepared.approvalTransaction ? 'Step 2: ' : ''}Sign the order</h3>
+      {prepared.sellerIsContract && <div className="mint-confirmation"><h3>Signing as a Safe</h3>
+        <p>Your seller account is a smart-contract wallet. {prepared.approvalTransaction ? 'Execute the approval transaction in your Safe first: ' : ''}Sign the exact order below as a Safe message (EIP-712) with enough owners to meet the threshold, then paste the combined signature. The console verifies it on-chain with ERC-1271.</p>
+        {prepared.approvalTransaction && <p className="mono">Approval: to {prepared.approvalTransaction.to}, data {prepared.approvalTransaction.data}</p>}
+        <label className="field"><span>Order typed data (copy into your Safe)</span><textarea readOnly rows={6} value={JSON.stringify(prepared.typedData)}/></label>
+        <label className="field"><span>Combined Safe signature</span><input value={safeSignature} onChange={e => setSafeSignature(e.target.value.trim())} placeholder="0x…" spellCheck={false}/></label>
+        <button className="button primary" disabled={!/^0x[0-9a-fA-F]{130,}$/.test(safeSignature) || !!busy} onClick={() => run('safe-sign', async () => {
+          const result = await api(`/api/marketplace/listings/${prepared.listing.id}/signature`, { method: 'POST', csrf, body: { signature: safeSignature }, timeoutMs: 90000 }) as Listing;
+          setPrepared(null); setSafeSignature(''); setStatus(`Result: ${STATE_LABELS[result.state]?.[0] || result.state}.`); await refresh();
+        })}>Verify Safe signature and submit</button></div>}
+      {!prepared.sellerIsContract && <div className="mint-confirmation"><h3>{prepared.approvalTransaction ? 'Step 2: ' : ''}Sign the order</h3>
         <label className="review-checkbox"><input type="checkbox" checked={acknowledged} onChange={e => setAcknowledged(e.target.checked)}/> I reviewed the price, payments and expiry. Signing creates an offer anyone can fill until it expires or I cancel it on-chain.</label>
         <button className="button primary" disabled={!acknowledged || !!prepared.approvalTransaction || !!busy} onClick={sign}>{busy === 'sign' ? 'Waiting for wallet…' : 'Sign and submit'}</button>
-        <button className="text-button" disabled={!!busy} onClick={() => void cancel(prepared.listing).then(() => setPrepared(null))}>Discard</button></div>
+        <button className="text-button" disabled={!!busy} onClick={() => void cancel(prepared.listing).then(() => setPrepared(null))}>Discard</button></div>}
     </section>}
     {owner && <section className="panel" aria-labelledby="listings">
       <div className="section-heading"><div><span className="eyebrow">YOUR ORDERS</span><h2 id="listings">Listings and sales</h2></div><button className="button secondary" onClick={() => void refresh()} disabled={!!busy}>Refresh</button></div>

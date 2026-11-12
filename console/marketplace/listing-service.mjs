@@ -126,7 +126,8 @@ export class ListingService {
         [account,id,this.chainId,market.seaport.toLowerCase(),token.collection.toLowerCase(),token.tokenId,seller.toLowerCase(),plan.orderHash,plan.components,review]);
       return r.rows[0];
     });
-    return {listing:listingView(row),typedData:{domain:plan.domain,types:plan.types,primaryType:'OrderComponents',message:plan.components},
+    const sellerIsContract=(await this.provider.getCode(seller))!=='0x';
+    return {listing:listingView(row),sellerIsContract,typedData:{domain:plan.domain,types:plan.types,primaryType:'OrderComponents',message:plan.components},
       approvalTransaction:token.approved?null:approvalTransaction(token.collection,market.operator)};
   }
 
@@ -230,7 +231,10 @@ export class ListingService {
     if(tx){
       const {market,plan}=await this.#plan(row);
       const expected=cancelTransaction(market,plan.components);
-      if(getAddress(tx.from)!==getAddress(row.seller)||!tx.to||getAddress(tx.to)!==getAddress(market.seaport)||tx.data.toLowerCase()!==expected.data.toLowerCase())fail('NOT_THE_CANCEL_TRANSACTION',409);
+      const direct=getAddress(tx.from)===getAddress(row.seller)&&tx.to&&getAddress(tx.to)===getAddress(market.seaport)&&tx.data.toLowerCase()===expected.data.toLowerCase();
+      // A Safe seller executes through its own contract: the outer call targets the Safe and must embed the exact cancel calldata.
+      const viaSafe=tx.to&&getAddress(tx.to)===getAddress(row.seller)&&tx.data.toLowerCase().includes(expected.data.slice(2).toLowerCase());
+      if(!direct&&!viaSafe)fail('NOT_THE_CANCEL_TRANSACTION',409);
     }
     await this.#update(id,actor,{cancel_tx:hash.toLowerCase(),state:'cancel_pending'});
     return this.verify(actor,id);

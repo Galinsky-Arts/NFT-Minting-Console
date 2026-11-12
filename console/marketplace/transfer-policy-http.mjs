@@ -1,6 +1,6 @@
 import {Contract,ZeroAddress} from 'ethers';
 import {ListingError,marketplaceProfile,inspectMarketplace} from './listing.mjs';
-import {inspectPolicy,listIdFromReceipt} from './transfer-policy.mjs';
+import {inspectPolicy,listIdFromReceipt,safeBatch} from './transfer-policy.mjs';
 
 const MESSAGES=Object.freeze({
   NOT_COLLECTION_OWNER:'Only the collection OWNER wallet can configure its transfer policy. Sign in with the OWNER wallet (or use its Safe).',
@@ -36,7 +36,9 @@ export function installPolicyRoutes(app,requireAction,{provider,chainId,profile,
     let name='NFT Console marketplace list';
     try{name=`${await new Contract(req.body.collection,['function name() view returns (string)'],provider).name()} marketplace list`;}catch{/* name is cosmetic */}
     const result=await inspectPolicy(provider,{collection:req.body?.collection,owner:req.actor.wallet,validator,market:m,listId,name});
-    return {...result,network:chainId,marketplace:{...result.marketplace,name:m.name,zone:m.zone===ZeroAddress?null:m.zone,operator:m.operator}};
+    const isContractOwner=(await provider.getCode(req.actor.wallet))!=='0x';
+    return {...result,network:chainId,ownerIsContract:isContractOwner,safeBatch:isContractOwner&&result.steps.length?safeBatch({chainId,safe:req.actor.wallet,steps:result.steps}):null,
+      marketplace:{...result.marketplace,name:m.name,zone:m.zone===ZeroAddress?null:m.zone,operator:m.operator}};
   };
   app.post('/api/policy/inspect',requireAction('deploy'),wrap(req=>inspect(req,req.body?.listId??null)));
   app.post('/api/policy/list',requireAction('deploy'),wrap(async req=>{

@@ -11,11 +11,13 @@ interface PolicyPlan {
   configured: boolean; steps: Step[]; disclosure: string[]; listId: string | null; validator: string; whitelistRuleset: string;
   policy: { rulesetId: number; listId: string; customRuleset: string; globalOptions: number; rulesetOptions: number };
   marketplace: { account: string; role: string; listed: boolean; name: string };
+  ownerIsContract?: boolean; safeBatch?: unknown;
 }
 
 /** OWNER walks through the exact validator transactions; every step is followed by an on-chain readback. */
 export function TransferPolicy({ current, walletProvider, expired }: { current: Session; walletProvider: () => WalletProvider | null; expired: () => void }) {
   const [collection, setCollection] = useState(''), [plan, setPlan] = useState<PolicyPlan | null>(null);
+  const [listHash, setListHash] = useState('');
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [status, setStatus] = useState(''), [understood, setUnderstood] = useState(false);
   const fail = (e: unknown) => { if (e instanceof ApiError && e.status === 401) expired(); setError(e instanceof Error ? e.message : 'The policy step failed.'); };
   const load = async (listId: string | null = plan?.listId ?? null) => setPlan(await api('/api/policy/inspect', { method: 'POST', csrf: current.csrf, body: { collection: collection.trim(), listId }, timeoutMs: 30000 }) as PolicyPlan);
@@ -47,7 +49,14 @@ export function TransferPolicy({ current, walletProvider, expired }: { current: 
       {!plan.configured && <>
         <ol>{plan.steps.map(s => <li key={s.id}>{s.label} <small className="mono">to {s.to.slice(0, 10)}…</small></li>)}</ol>
         <label className="review-checkbox"><input type="checkbox" checked={understood} onChange={e => setUnderstood(e.target.checked)}/> I understand this policy controls which marketplaces can move tokens in this collection, for every holder.</label>
-        <button className="button primary" disabled={!understood || busy} onClick={next}>{busy ? 'Waiting for wallet…' : `Send: ${plan.steps[0]?.label ?? ''}`}</button>
+        {plan.ownerIsContract ? <div className="mint-confirmation"><h3>Execute in your Safe</h3>
+          <p>Your OWNER is a smart-contract wallet. Download the batch, import it into the Safe Transaction Builder, collect the owner confirmations and execute it. Then return here: the console reads the result from the chain.</p>
+          <button className="button secondary" disabled={!understood} onClick={() => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(plan.safeBatch, null, 2)], { type: 'application/json' })); a.download = `nft-console-policy-${collection.trim().slice(2, 8).toLowerCase()}.json`; a.click(); }}>Download Safe batch ({plan.steps.length} transaction{plan.steps.length === 1 ? '' : 's'})</button>
+          {plan.steps[0]?.id === 'create-list' && <label className="field"><span>Executed Safe transaction hash (contains the new list)</span><input value={listHash} onChange={e => setListHash(e.target.value.trim())} placeholder="0x…"/></label>}
+          <button className="button primary" disabled={busy} onClick={() => { setBusy(true); setError(''); void (async () => { try {
+            if (listHash) setPlan(await api('/api/policy/list', { method: 'POST', csrf: current.csrf, body: { collection: collection.trim(), hash: listHash }, timeoutMs: 30000 }) as PolicyPlan); else await load();
+            setStatus('Read back from the chain.'); } catch (e) { fail(e); } finally { setBusy(false); } })(); }}>I executed it: check the chain</button></div>
+        : <button className="button primary" disabled={!understood || busy} onClick={next}>{busy ? 'Waiting for wallet…' : `Send: ${plan.steps[0]?.label ?? ''}`}</button>}
       </>}
     </>}
   </section>;

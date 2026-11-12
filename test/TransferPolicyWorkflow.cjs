@@ -46,6 +46,8 @@ describe('Transfer-policy workflow (real Limit Break validator + real Seaport)',
     const create = plan.steps.find(s => s.id === 'create-list');
     const tx = await owner.sendTransaction({ to: create.to, data: create.data }); await tx.wait();
     await expect(P.listIdFromReceipt(ethers.provider, { hash: tx.hash, owner: outsider.address, validator: validator.target })).to.be.rejectedWith('NOT_THE_LIST_TRANSACTION');
+    const batch = P.safeBatch({ chainId: 31337, safe: owner.address, steps: plan.steps });
+    expect(batch.transactions.map(t => t.to)).to.deep.equal(plan.steps.map(s => s.to));
     const listId = await P.listIdFromReceipt(ethers.provider, { hash: tx.hash, owner: owner.address, validator: validator.target });
     plan = await inspect(listId);
     expect(plan.steps.map(s => s.id)).to.deep.equal(['apply-list', 'add-marketplace']);
