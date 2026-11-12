@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {getAddress,Contract} from 'ethers';
+import {getAddress,Contract,ZeroAddress} from 'ethers';
 import {ListingError,marketplaceProfile,inspectMarketplace,inspectToken,splitPayments,composeOrder,checkComponents,
   onChainOrderHash,verifyOrderSignature,observeOrder,findSettlement,approvalTransaction,cancelTransaction,priceOf,SEAPORT_ABI} from './listing.mjs';
 import {openSeaListingTerms,submitToOpenSea,observeOpenSea} from './opensea.mjs';
@@ -18,7 +18,8 @@ const TX=/^0x[0-9a-fA-F]{64}$/;
 export function listingView(row){
   if(!row)return null;
   return {id:row.id,chainId:Number(row.chain_id),seaport:row.seaport,collection:row.collection,tokenId:String(row.token_id),seller:row.seller,
-    orderHash:row.order_hash,state:row.state,review:row.review,signed:Boolean(row.signature),submission:row.submission,
+    orderHash:row.order_hash,state:row.state,review:row.review,signed:Boolean(row.signature),
+    order:row.signature?{components:row.components,signature:row.signature}:null,submission:row.submission,
     observation:row.observation,settlement:row.settlement,cancelTx:row.cancel_tx,createdAt:row.created_at,updatedAt:row.updated_at};
 }
 
@@ -72,7 +73,7 @@ export class ListingService {
   async inspect(actor,{collection,tokenId,priceWei='1000000000000000000'}){
     this.#require();
     const market=await inspectMarketplace(this.provider,this.market);
-    const token=await inspectToken(this.provider,{collection,tokenId,seller:actor.wallet,operator:market.operator,priceWei});
+    const token=await inspectToken(this.provider,{collection,tokenId,seller:actor.wallet,operator:market.operator,priceWei,zone:market.zone});
     return {market:{name:market.name,seaport:market.seaport,operator:market.operator},token};
   }
 
@@ -81,7 +82,7 @@ export class ListingService {
     const days=Number(durationDays);if(!Number.isInteger(days)||days<1||days>180)fail('EXPIRATION',400);
     const seller=getAddress(actor.wallet);
     let market=await inspectMarketplace(this.provider,this.market);
-    let token=await inspectToken(this.provider,{collection,tokenId,seller,operator:market.operator,priceWei});
+    let token=await inspectToken(this.provider,{collection,tokenId,seller,operator:market.operator,priceWei,zone:market.zone});
     if(!token.sellerOwns)fail('NOT_TOKEN_OWNER',409,{owner:token.owner});
     if(token.policy.status==='blocked')fail('POLICY_BLOCKS_MARKETPLACE',409,token.policy);
     if(token.policy.status==='unknown')fail('POLICY_UNVERIFIED',503,token.policy);
@@ -91,6 +92,8 @@ export class ListingService {
     if(this.market.api==='opensea'){
       const terms=await openSeaListingTerms(this.opensea,{collection:token.collection,tokenId:token.tokenId,royalty});
       if(terms.requiredZone&&terms.requiredZone!==market.zone)market=await inspectMarketplace(this.provider,this.market,{zone:terms.requiredZone});
+      if(market.zone!==ZeroAddress){token=await inspectToken(this.provider,{collection,tokenId,seller,operator:market.operator,priceWei,zone:market.zone});
+        if(token.policy.status==='blocked')fail('POLICY_BLOCKS_MARKETPLACE',409,token.policy);}
       fees=terms.fees;openseaSlug=terms.slug;
       if(terms.creatorFeeBps>0&&royalty){
         const required=BigInt(priceWei)*BigInt(terms.creatorFeeBps)/10000n;

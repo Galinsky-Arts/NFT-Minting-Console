@@ -89,7 +89,7 @@ export async function inspectMarketplace(provider,market,{zone}={}){
 }
 
 /** Reads token ownership, operator approval, ERC-2981 royalty and transfer-policy compatibility. */
-export async function inspectToken(provider,{collection,tokenId,seller,operator,priceWei}){
+export async function inspectToken(provider,{collection,tokenId,seller,operator,priceWei,zone=ZeroAddress}){
   collection=address(collection,'COLLECTION');seller=address(seller,'SELLER');operator=address(operator,'OPERATOR');
   const id=uint(tokenId,'TOKEN_ID'),price=uint(priceWei,'PRICE');
   if(!await hasCode(provider,collection))fail('COLLECTION_NOT_DEPLOYED');
@@ -106,11 +106,12 @@ export async function inspectToken(provider,{collection,tokenId,seller,operator,
   }
   return Object.freeze({collection,tokenId:id.toString(),owner,sellerOwns:owner===seller,
     approved:approvedForAll||single,approvalKind:approvedForAll?'operator':single?'token':'none',royalty,
-    policy:await transferPolicy(provider,{collection,tokenId:id,from:seller,operator})});
+    policy:await transferPolicy(provider,{collection,tokenId:id,from:seller,operator,zone})});
 }
 
 /** Asks the collection's actual validator whether the Seaport operator may move this token. */
-export async function transferPolicy(provider,{collection,tokenId,from,operator}){
+const POLICY_READ=new Interface(['function getCollectionSecurityPolicy(address) view returns ((uint8 rulesetId,uint48 listId,address customRuleset,uint8 globalOptions,uint16 rulesetOptions,uint16 tokenType))','function isAccountInList(uint48 id, uint8 listType, address account) view returns (bool)']);
+export async function transferPolicy(provider,{collection,tokenId,from,operator,zone=ZeroAddress}){
   const token=new Contract(collection,TOKEN_ABI,provider);
   let validator;
   try{validator=address(await token.getTransferValidator(),'VALIDATOR',true);}catch{return {status:'not-creator-token',validator:null};}
@@ -120,8 +121,18 @@ export async function transferPolicy(provider,{collection,tokenId,from,operator}
   try{await provider.call({to:validator,from:collection,data});return {status:'compatible',validator};}
   catch(error){
     const reverted=error?.code==='CALL_EXCEPTION'||typeof error?.data==='string';
-    return reverted?{status:'blocked',validator,detail:'OPERATOR_REJECTED'}:{status:'unknown',validator,detail:'VALIDATOR_CALL_FAILED'};
+    if(!reverted)return {status:'unknown',validator,detail:'VALIDATOR_CALL_FAILED'};
   }
+  // Zone-restricted orders: the marketplace zone pre-authorizes each fill through beforeAuthorizedTransfer.
+  // That path works only if authorization mode is on (global flag bit 0 clear) and the zone is a listed authorizer.
+  if(zone&&zone!==ZeroAddress){
+    try{
+      const v=new Contract(validator,POLICY_READ,provider);
+      const p=await v.getCollectionSecurityPolicy(collection);
+      if((Number(p.globalOptions)&1)===0&&await v.isAccountInList(p.listId,2,zone))return {status:'compatible-via-authorizer',validator,authorizer:zone};
+    }catch{return {status:'unknown',validator,detail:'VALIDATOR_CALL_FAILED'};}
+  }
+  return {status:'blocked',validator,detail:'OPERATOR_REJECTED'};
 }
 
 /** Splits the price exactly: seller proceeds first, then marketplace fees, then the creator royalty. */
@@ -228,7 +239,7 @@ export async function observeOrder(provider,market,{components,signature,orderHa
   const block=await provider.getBlock('latest');const now=BigInt(block.timestamp);
   const [status,counter]=await Promise.all([seaport.getOrderStatus(orderHash),seaport.getCounter(components.offerer)]);
   const o=components.offer[0],price=priceOf(components);
-  const token=await inspectToken(provider,{collection:o.token,tokenId:o.identifierOrCriteria,seller:components.offerer,operator:market.operator,priceWei:price.toString()}).catch(e=>({error:e.code||'TOKEN_UNREADABLE'}));
+  const token=await inspectToken(provider,{collection:o.token,tokenId:o.identifierOrCriteria,seller:components.offerer,operator:market.operator,priceWei:price.toString(),zone:market.zone}).catch(e=>({error:e.code||'TOKEN_UNREADABLE'}));
   const facts={observedBlock:block.number,observedAt:new Date(Number(block.timestamp)*1000).toISOString(),
     seaport:{validated:status.isValidated,cancelled:status.isCancelled,totalFilled:status.totalFilled.toString(),totalSize:status.totalSize.toString()},
     counterMatches:counter.toString()===components.counter,started:now>=BigInt(components.startTime),expired:now>=BigInt(components.endTime),

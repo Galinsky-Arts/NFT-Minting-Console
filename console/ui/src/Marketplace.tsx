@@ -4,6 +4,7 @@ import { api, ApiError } from './api';
 import type { Configuration, Session } from './model';
 import type { WalletProvider } from './auth';
 import { Icon, Notice, SignInPrompt } from './components';
+import { TransferPolicy } from './TransferPolicy';
 import { ListingFlowError, sendAndConfirm, signOrder, type TypedOrder, type WalletTransaction } from './marketplace-wallet';
 
 interface Payment { role: string; label: string; recipient: string; amountWei: string; bps?: number }
@@ -100,6 +101,7 @@ function MarketplaceWorkspace({ current, config, expired, walletProvider }: Prop
     {!owner && <Notice>Only the collection owner role can create or manage listings. You can view this page but not sign orders.</Notice>}
     {error && <Notice error>{error}</Notice>}
     {status && <p role="status" className="loading">{status}</p>}
+    {owner && <TransferPolicy current={current} walletProvider={walletProvider} expired={expired}/>}
     {owner && <section className="panel" aria-labelledby="new-listing">
       <div className="section-heading"><span className="eyebrow">NEW LISTING</span><h2 id="new-listing">List a minted NFT for sale</h2></div>
       <div className="form-grid">
@@ -113,7 +115,7 @@ function MarketplaceWorkspace({ current, config, expired, walletProvider }: Prop
       {inspection && <dl className="preview-grid" aria-label="Token check">
         <div><dt>Owner</dt><dd className="mono">{short(inspection.token.owner)} {inspection.token.sellerOwns ? '(you)' : '(not your wallet)'}</dd></div>
         <div><dt>Marketplace operator approval</dt><dd>{inspection.token.approved ? 'Approved' : 'Approval needed before the order can be filled'}</dd></div>
-        <div><dt>Transfer policy</dt><dd>{({ compatible: 'Allows this marketplace', blocked: 'Blocks this marketplace: update the transfer policy first', 'no-validator': 'No transfer validator set', 'not-creator-token': 'Not a creator-token collection', unknown: 'Could not be verified' } as Record<string, string>)[inspection.token.policy.status]}</dd></div>
+        <div><dt>Transfer policy</dt><dd>{({ compatible: 'Allows this marketplace', blocked: 'Blocks this marketplace: update the transfer policy first', 'compatible-via-authorizer': 'Allows this marketplace (authorized by its signed zone)', 'no-validator': 'No transfer validator set', 'not-creator-token': 'Not a creator-token collection', unknown: 'Could not be verified' } as Record<string, string>)[inspection.token.policy.status]}</dd></div>
         <div><dt>Creator royalty (ERC-2981)</dt><dd>{inspection.token.royalty ? `${eth(inspection.token.royalty.amountWei)} to ${short(inspection.token.royalty.recipient)}` : 'None reported'}</dd></div>
       </dl>}
     </section>}
