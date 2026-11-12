@@ -19,14 +19,20 @@ import {installCostQuoteRoutes} from './launch/quote.mjs';
 import {installPublicationWorkbench} from './publication/workbench-http.mjs';
 import {checkPublicationSchema} from './publication/workbench-schema.mjs';
 import {localMintMode} from './operations/local-mode.mjs';
+import {ListingService,checkMarketplaceSchema} from './marketplace/listing-service.mjs';
+import {installMarketplaceRoutes} from './marketplace/listing-http.mjs';
+import {createOpenSea} from './marketplace/opensea.mjs';
+import {installPolicyRoutes} from './marketplace/transfer-policy-http.mjs';
+import {WorkspaceService} from './workspace/service.mjs';
+import {installWorkspaceRoutes} from './workspace/http.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const chainRegistry=JSON.parse(fs.readFileSync(path.join(root,'config/chains.json'),'utf8'));
 const blockedFeatures=Object.freeze([
-  {id:'private-workspace',milestones:['NFT-10','NFT-11','NFT-12'],description:'Low-level attachment encryption is implemented; private draft editing, recovery and ciphertext object storage integration remain unfinished.'},
+  {id:'private-workspace',milestones:['NFT-10','NFT-11','NFT-12'],description:'Client-encrypted drafts (Argon2id vault, account-root-certified devices, RFC 9420 MLS key delivery, recovery backup) and resumable encrypted chunk storage are implemented. The hosted origin still serves the client code; authenticated code-update roots and transparency monitoring are not implemented.'},
   {id:'explicit-publication',milestones:['NFT-13','NFT-19','NFT-20'],description:'Reviewed public browser/CLI uploads and exact-byte readback are implemented. Encrypted-draft declassification, private storage and large resumable transfers remain separate unfinished work.'},
   {id:'release-experience',milestones:['NFT-14','NFT-16','NFT-17','NFT-18'],description:'Encrypted saved releases, private media editing and the complete rights workflow remain unfinished.'},
   {id:'verified-chain-workflow',milestones:['NFT-21','NFT-22','NFT-23','NFT-24','NFT-25'],description:'The public EOA deployment/mint flow is browser-tested. Automated validator-policy provisioning and live production transaction evidence remain outstanding.'},
-  {id:'marketplace',milestones:['NFT-26','NFT-27','NFT-28','NFT-29'],description:'Seaport order signing and OpenSea submission components exist. The complete user flow, active-listing verification and real-sale checks remain unfinished.'},
+  {id:'marketplace',milestones:['NFT-26','NFT-27','NFT-28','NFT-29'],description:'The browser listing flow (review, approval, EIP-712 signing, OpenSea submission, independent chain and marketplace verification, cancellation and settlement evidence) is implemented and tested against real Seaport 1.6 on a local chain. A live OpenSea listing and a real mainnet sale have not been observed.'},
   {id:'production-evidence',milestones:['NFT-30','NFT-31','NFT-32','NFT-33','NFT-34','NFT-35','NFT-36'],description:'Durable database and first-run setup are implemented. Live runtime configuration, a verified user mint and real-sale acceptance remain separate checks. External human review is deferred by owner policy.'},
 ]);
 const closed=(res,code,error)=>res.status(409).json({code,error,productionReady:false});
@@ -52,7 +58,8 @@ export function createApp({env=process.env,authService,launchContentOptions}={})
     if(auth.origin!==origin||auth.chainId!==chainId)throw new Error('Authentication realm does not match server configuration.');
   }catch(error){provider?.destroy();void persistence?.close();throw error;}
   const launchJournal=persistence&&publicLaunch?new LaunchJournal(persistence.repository):null;
-  const ready=(persistence?.ready||Promise.resolve()).then(()=>launchJournal?.checkSchema()).then(()=>launchJournal&&env.PINATA_JWT?checkPublicationSchema(persistence.repository):undefined);
+  const ready=(persistence?.ready||Promise.resolve()).then(()=>launchJournal?.checkSchema()).then(()=>launchJournal&&env.PINATA_JWT?checkPublicationSchema(persistence.repository):undefined).then(()=>persistence?checkMarketplaceSchema(persistence.repository):undefined);
+  const listings=persistence?new ListingService({repository:persistence.repository,provider,chainId,profile,env,opensea:chainId===1?createOpenSea({apiKey:env.OPENSEA_API_KEY}):null}):null;
   app.disable('x-powered-by');app.set('trust proxy',false);
   app.use((_req,res,next)=>{
     res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('Cross-Origin-Resource-Policy','same-origin');
@@ -62,10 +69,14 @@ export function createApp({env=process.env,authService,launchContentOptions}={})
   app.use('/api',(_req,res,next)=>{ready.then(()=>next(),()=>res.status(503).json({error:'Configured database authorization is unavailable. No memory fallback is permitted.',code:'database_unavailable'}));});
   app.use('/api/launch/mint',express.json({limit:'1536kb',strict:true}));
   app.use('/api/launch/quote',express.json({limit:'8mb',strict:true}));
+  app.use('/api/workspace/drafts',express.json({limit:'1100kb',strict:true}));
   app.use(express.json({limit:'64kb',strict:true}));
   const requireAction=installAuthRoutes(app,auth,{production});
   if(persistence){installReleaseRoutes(app,requireAction,persistence.repository);installJournalRoutes(app,requireAction,persistence.journal,provider);}
   if(launchJournal){installLaunchRoutes(app,requireAction,{journal:launchJournal,provider,artifact:launchArtifact,enabled:publicLaunch,chainId,contentOptions:launchContentOptions});installCostQuoteRoutes(app,requireAction,{journal:launchJournal,provider,artifact:launchArtifact,enabled:publicLaunch,chainId,contentOptions:launchContentOptions});}
+  if(listings)installMarketplaceRoutes(app,requireAction,listings);
+  installPolicyRoutes(app,requireAction,{provider,chainId,profile,env});
+  if(persistence)installWorkspaceRoutes(app,requireAction,new WorkspaceService(persistence.repository));
   if(launchJournal&&env.PINATA_JWT)installPublicationWorkbench(app,requireAction,{repository:persistence.repository,jwt:env.PINATA_JWT,contentOptions:launchContentOptions});
   app.get('/api/config',(_req,res)=>res.json({chainId,chainSlug:profile.slug,chainName:profile.name,production:profile.production,deploymentFactory:factoryAddress,pinningReady:false,pinningConfigured:Boolean(env.PINATA_JWT),loginConfigured:roles.size>0&&Boolean(provider),validator:env.TRANSFER_VALIDATOR_ADDRESS||profile.validator,signedZone:env.OPENSEA_SIGNED_ZONE||profile.signedZone,productionReady:false,authStore:persistence?'postgresql':'development-memory',capabilities:{publicPublication:Boolean(launchJournal&&env.PINATA_JWT),publicLaunch,localMint,mintJournal:Boolean(persistence),privateDrafts:false,opaqueReleaseApi:Boolean(persistence),publish:false,mint:false,list:false,deploy:chainId!==1&&Boolean(factoryAddress)}}));
   app.get('/api/health',(_req,res)=>res.json({ok:true,productionReady:false}));

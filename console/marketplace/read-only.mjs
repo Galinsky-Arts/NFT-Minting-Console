@@ -34,8 +34,10 @@ function immutableResponse(bytes){
     const decoded=new TextDecoder('utf-8',{fatal:true}).decode(bytes);
     parsed=JSON.parse(decoded,(_key,value,context)=>{
       if(typeof value==='number'&&!Number.isSafeInteger(value)){
-        if(!Number.isFinite(value)||!Number.isInteger(value))reject('UNSAFE_JSON_NUMBER');
         const source=context?.source;
+        // Fee percentages such as 2.5 arrive as JSON doubles: keep the exact source text, never a rounded float.
+        if(Number.isFinite(value)&&!Number.isInteger(value)&&typeof source==='string'&&/^(?:0|[1-9][0-9]{0,8})\.[0-9]{1,8}$/.test(source))return source;
+        if(!Number.isFinite(value)||!Number.isInteger(value))reject('UNSAFE_JSON_NUMBER');
         if(typeof source!=='string'||!/^(?:0|[1-9][0-9]{0,77})$/.test(source))reject('UNSAFE_JSON_NUMBER');
         return source;
       }

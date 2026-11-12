@@ -127,6 +127,42 @@ export async function prepareAttachment(blob, { parentMessageId, filename, media
   } finally { digest.destroy(); }
 }
 
+/** Resume an interrupted encrypted upload after a reload. The manifest (from the authenticated encrypted draft)
+ * is reused only if the re-selected file has exactly the same size and whole-file SHA-256. Chunks the server already
+ * holds are skipped and never re-encrypted, so a chunk nonce is only reused for byte-identical plaintext. Callers must
+ * verify the completed object by decrypting it (whole-file hash) to detect a file changed during this pass. */
+export async function resumeAttachment(blob, input, expectedParentMessageId, { signal } = {}) {
+  if (!(blob instanceof Blob)) fail();
+  const manifest = validatePrivateManifest(input, expectedParentMessageId);
+  const size = Object.getOwnPropertyDescriptor(Blob.prototype, 'size').get.call(blob);
+  if (size !== manifest.plaintext_size_bytes) fail();
+  const chunkSize = manifest.chunk_size_bytes, count = manifest.chunk_count;
+  const read = (start, end) => Blob.prototype.arrayBuffer.call(Blob.prototype.slice.call(blob, start, end));
+  const digest = sha256.create();
+  try {
+    for (let index = 0; index < count; index++) {
+      abort(signal);
+      const bytes = new Uint8Array(await read(index * chunkSize, Math.min(size, (index + 1) * chunkSize)));
+      try { digest.update(bytes); } finally { bytes.fill(0); }
+    }
+    if (hex(digest.digest()) !== manifest.plaintext_hash_hex) fail();
+  } finally { digest.destroy(); }
+  return Object.freeze({ privateManifest: manifest, async encryptMissing(skip, writeCiphertext) {
+    if (!(skip instanceof Set) || typeof writeCiphertext !== 'function') fail();
+    const key = await importKey(manifest, 'encrypt');
+    for (let index = 0; index < count; index++) {
+      if (skip.has(index)) continue;
+      abort(signal);
+      const bytes = new Uint8Array(await read(index * chunkSize, Math.min(size, (index + 1) * chunkSize)));
+      try {
+        if (bytes.length !== position(manifest, index)) fail();
+        await writeCiphertext(index, new Uint8Array(await globalThis.crypto.subtle.encrypt(parameters(manifest, index), key, bytes)));
+      } finally { bytes.fill(0); }
+    }
+    return Object.freeze({ ciphertextComplete: true, chunks: count });
+  } });
+}
+
 /** This function requires an already-authenticated parent manifest and expected
  * parent identity. Validating its digest alone does NOT authenticate its sender. */
 export async function openAttachment(input, expectedParentMessageId) {
