@@ -34,7 +34,7 @@ export function TransferPolicy({ current, walletProvider, expired }: { current: 
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
   return <section className="panel" aria-labelledby="policy-heading">
-    <div className="section-heading"><span className="eyebrow">COLLECTION OWNER</span><h2 id="policy-heading">Marketplace transfer policy</h2></div>
+    <div className="section-heading"><div><span className="eyebrow">COLLECTION OWNER</span><h2 id="policy-heading">Marketplace transfer policy</h2></div></div>
     <p>Before a marketplace can sell tokens from a creator-token collection, the collection's transfer validator must allow that marketplace. Each change is a wallet transaction from the collection OWNER.</p>
     <div className="form-grid"><label className="field"><span>Collection contract</span><input value={collection} onChange={e => { setCollection(e.target.value); setPlan(null); }} placeholder="0x…" spellCheck={false}/></label></div>
     <div className="button-row"><button className="button secondary" disabled={!isAddress(collection.trim()) || busy} onClick={check}>{busy && !plan ? 'Reading policy…' : 'Check policy'}</button></div>

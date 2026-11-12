@@ -180,3 +180,16 @@ test('enrollment by fingerprint and full recovery after losing every device',asy
     assert.deepEqual(W.decryptDraft(restored.draftKeys[draftId],await svc.getDraft(owner,draftId)),{title:'kept'});
   }finally{await db.close();}
 });
+
+test('resume after reload re-encrypts only missing chunks identically and refuses a different file',async()=>{
+  const {resumeAttachment}=await import('../console/crypto/attachments.mjs');
+  const bytes=new Uint8Array(2*1024*1024+7).map((_,i)=>(i*7)&255),parent=W.newId();
+  const first=await prepareAttachment(new Blob([bytes]),{parentMessageId:parent,filename:'a.bin',chunkSize:1024*1024});
+  const original=[];await first.encryptTo((i,c)=>{original[i]=c;});
+  const resumed=await resumeAttachment(new Blob([bytes]),first.privateManifest,parent);
+  const again={};await resumed.encryptMissing(new Set([0]),(i,c)=>{again[i]=c;});
+  assert.deepEqual(Object.keys(again),['1','2']);
+  for(const i of [1,2])assert.equal(Buffer.compare(Buffer.from(again[i]),Buffer.from(original[i])),0);
+  const changed=new Uint8Array(bytes);changed[10]^=1;
+  await assert.rejects(resumeAttachment(new Blob([changed]),first.privateManifest,parent));
+});

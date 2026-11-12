@@ -23,3 +23,7 @@ export function openAttachment(input: unknown, expectedParentMessageId: string):
     writeAuthenticatedChunk: (index: number, plaintext: Uint8Array) => void | Promise<void>,
     options?: { signal?: AbortSignal }): Promise<Readonly<{ wholeFileVerified: true; chunks: number; plaintextBytes: number }>>;
 }>>;
+export function resumeAttachment(blob: Blob, manifest: unknown, expectedParentMessageId: string, options?: { signal?: AbortSignal }): Promise<Readonly<{
+  privateManifest: Readonly<PrivateAttachmentManifest>;
+  encryptMissing(skip: Set<number>, writeCiphertext: (index: number, ciphertext: Uint8Array) => void | Promise<void>): Promise<Readonly<{ ciphertextComplete: true; chunks: number }>>;
+}>>;

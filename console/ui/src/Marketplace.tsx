@@ -103,7 +103,7 @@ function MarketplaceWorkspace({ current, config, expired, walletProvider }: Prop
     {status && <p role="status" className="loading">{status}</p>}
     {owner && <TransferPolicy current={current} walletProvider={walletProvider} expired={expired}/>}
     {owner && <section className="panel" aria-labelledby="new-listing">
-      <div className="section-heading"><span className="eyebrow">NEW LISTING</span><h2 id="new-listing">List a minted NFT for sale</h2></div>
+      <div className="section-heading"><div><span className="eyebrow">NEW LISTING</span><h2 id="new-listing">List a minted NFT for sale</h2></div></div>
       <div className="form-grid">
         <label className="field"><span>Collection contract</span><input value={form.collection} onChange={e => setForm({ ...form, collection: e.target.value })} placeholder="0x…" spellCheck={false} autoComplete="off"/></label>
         <label className="field"><span>Token ID</span><input value={form.tokenId} inputMode="numeric" onChange={e => setForm({ ...form, tokenId: e.target.value })}/></label>
@@ -120,7 +120,7 @@ function MarketplaceWorkspace({ current, config, expired, walletProvider }: Prop
       </dl>}
     </section>}
     {prepared && <section className="panel cost-review" aria-labelledby="review-order">
-      <div className="section-heading"><span className="eyebrow">REVIEW BEFORE SIGNING</span><h2 id="review-order">Exact Seaport order</h2></div>
+      <div className="section-heading"><div><span className="eyebrow">REVIEW BEFORE SIGNING</span><h2 id="review-order">Exact Seaport order</h2></div></div>
       <p>Token #{prepared.listing.tokenId} of <span className="mono">{prepared.listing.collection}</span> for <strong>{eth(prepared.listing.review.priceWei)}</strong> on {prepared.listing.review.marketplace}, until {new Date(Number(prepared.listing.review.endTime) * 1000).toLocaleString()}.</p>
       <table className="data-table"><caption>Where the buyer's payment goes</caption><thead><tr><th scope="col">Payment</th><th scope="col">Recipient</th><th scope="col">Amount</th></tr></thead>
         <tbody>{prepared.listing.review.payments.map((p, i) => <tr key={i}><td>{p.label}</td><td className="mono">{short(p.recipient)}</td><td>{eth(p.amountWei)}</td></tr>)}</tbody></table>
@@ -135,7 +135,7 @@ function MarketplaceWorkspace({ current, config, expired, walletProvider }: Prop
         <button className="text-button" disabled={!!busy} onClick={() => void cancel(prepared.listing).then(() => setPrepared(null))}>Discard</button></div>
     </section>}
     {owner && <section className="panel" aria-labelledby="listings">
-      <div className="section-heading"><span className="eyebrow">YOUR ORDERS</span><h2 id="listings">Listings and sales</h2><button className="button secondary" onClick={() => void refresh()} disabled={!!busy}>Refresh</button></div>
+      <div className="section-heading"><div><span className="eyebrow">YOUR ORDERS</span><h2 id="listings">Listings and sales</h2></div><button className="button secondary" onClick={() => void refresh()} disabled={!!busy}>Refresh</button></div>
       {!listings.length ? <p>No listing orders yet. Minted tokens are not listed until you sign an order here.</p> :
         <ul className="transaction-list">{listings.filter(l => l.state !== 'superseded').map(l => <li key={l.id} className="transaction-row">
           <div><strong>Token #{l.tokenId}</strong> <span className="mono">{short(l.collection)}</span> · {eth(l.review.priceWei)}</div>

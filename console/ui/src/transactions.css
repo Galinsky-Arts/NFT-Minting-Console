@@ -18,3 +18,6 @@
 .marketplace .badge[data-state="listed"],.marketplace .badge[data-state="sold"]{background:#e6f6ec;color:#11602f}
 .marketplace .badge[data-state="valid_unindexed"],.marketplace .badge[data-state="verifying"],.marketplace .badge[data-state="submission_uncertain"]{background:#fff6e0;color:#7a5200}
 .marketplace .badge[data-state="inactive"],.marketplace .badge[data-state="rejected"],.marketplace .badge[data-state="expired"],.marketplace .badge[data-state="cancelled"]{background:#fdecec;color:#8a1c1c}
+.recovery-code{font-size:1.15rem;letter-spacing:.06em;padding:.75rem 1rem;border:1px dashed var(--line,#c9ced8);border-radius:8px;display:inline-block;user-select:all}
+.private-workspace textarea{width:100%;font:inherit}
+.private-workspace label.button input[hidden]{display:none}

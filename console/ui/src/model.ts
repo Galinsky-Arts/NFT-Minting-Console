@@ -2,7 +2,7 @@ import { getAddress, isAddress } from 'ethers/address';
 const ZeroAddress = '0x0000000000000000000000000000000000000000';
 
 export type Role = 'owner' | 'editor' | 'viewer';
-export type Route = 'releases' | 'create' | 'readiness' | 'settings' | 'transactions' | 'launch' | 'marketplace';
+export type Route = 'releases' | 'create' | 'readiness' | 'settings' | 'transactions' | 'launch' | 'marketplace' | 'workspace';
 export interface Configuration {
   chainId: number; chainName: string; production: boolean; productionReady: boolean;
   loginConfigured: boolean; pinningConfigured: boolean; authStore: string;
@@ -16,7 +16,7 @@ export interface ReleasePage { items: ReleaseSummary[]; nextCursor: string | nul
 export interface Readiness { blockers: { id: string; milestones: string[]; description: string }[] }
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const SIGN_IN_STATEMENT = 'Sign in to NFT Console. This does not authorize publishing, minting, listing, or asset transfers.';
-export const ROUTES: Route[] = ['releases', 'create', 'readiness', 'settings', 'transactions', 'launch', 'marketplace'];
+export const ROUTES: Route[] = ['releases', 'create', 'readiness', 'settings', 'transactions', 'launch', 'marketplace', 'workspace'];
 export function routeFromHash(hash: string): Route {
   const route = hash.replace(/^#\/?/, '');
   return ROUTES.includes(route as Route) ? route as Route : 'releases';
