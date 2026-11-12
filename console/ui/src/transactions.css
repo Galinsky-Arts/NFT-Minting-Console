@@ -11,3 +11,10 @@
 .transaction-workspace .public-json { white-space:pre-wrap; overflow-wrap:anywhere; max-height:320px; overflow:auto; padding:16px; border:1px solid var(--line); font-size:.8rem; }
 .transaction-workspace .field .button { margin-top:16px; align-self:flex-start; }
 @media (max-width: 700px) { .transaction-row { align-items:stretch; flex-direction:column; } .transaction-workspace .section-heading { flex-wrap:wrap; gap:16px; } }
+.marketplace .button-row{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin-top:.8rem}
+.marketplace .data-table{width:100%;border-collapse:collapse;margin:1rem 0}
+.marketplace .data-table caption{text-align:left;font-weight:600;padding-bottom:.4rem}
+.marketplace .data-table th,.marketplace .data-table td{text-align:left;padding:.5rem .4rem;border-bottom:1px solid var(--line,#e3e6ec)}
+.marketplace .badge[data-state="listed"],.marketplace .badge[data-state="sold"]{background:#e6f6ec;color:#11602f}
+.marketplace .badge[data-state="valid_unindexed"],.marketplace .badge[data-state="verifying"],.marketplace .badge[data-state="submission_uncertain"]{background:#fff6e0;color:#7a5200}
+.marketplace .badge[data-state="inactive"],.marketplace .badge[data-state="rejected"],.marketplace .badge[data-state="expired"],.marketplace .badge[data-state="cancelled"]{background:#fdecec;color:#8a1c1c}

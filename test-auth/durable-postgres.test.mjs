@@ -38,7 +38,7 @@ test('durable store and release API repository against PostgreSQL',async t=>{
   const repo=new ReleaseRepository({pool,knownRoles:()=>roles});
   t.diagnostic(native?'Native PostgreSQL through pg; synthetic data only.':'Embedded PostgreSQL; serialized connection leases, not a native pg-driver claim.');
   await t.test('baseline and authorization migrations are checksum-bound and repeatable',async()=>{
-    assert.deepEqual(baseline,['001_release_model.sql']);assert.deepEqual(authorization,['001_auth_store.sql','002_release_rbac.sql','003_mint_journal.sql','004_public_launch_journal.sql','005_launch_nonce_resolution.sql','006_browser_installation.sql','007_publication_workbench.sql']);
+    assert.deepEqual(baseline,['001_release_model.sql']);assert.deepEqual(authorization,['001_auth_store.sql','002_release_rbac.sql','003_mint_journal.sql','004_public_launch_journal.sql','005_launch_nonce_resolution.sql','006_browser_installation.sql','007_publication_workbench.sql','008_marketplace_listings.sql']);
     assert.deepEqual(await migrate(db),[]);assert.deepEqual(await migrateAuth(db),[]);
     const directory=await mkdtemp(path.join(os.tmpdir(),'nft-auth-migration-'));
     try{
