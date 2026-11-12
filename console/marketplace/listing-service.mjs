@@ -26,7 +26,8 @@ export function listingView(row){
 export async function checkMarketplaceSchema(repository){
   const client=await repository.pool.connect();let broken;
   try{await client.query('BEGIN');await client.query('SET LOCAL ROLE nft_console_api');
-    await client.query('SELECT order_hash,components,review,signature,state,submission,observation,settlement,cancel_tx FROM nft_console.marketplace_listings LIMIT 0');await client.query('ROLLBACK');}
+    await client.query('SELECT order_hash,components,review,signature,state,submission,observation,settlement,cancel_tx FROM nft_console.marketplace_listings LIMIT 0');
+    await client.query('SELECT root_public_key,epoch FROM nft_console.workspace_accounts LIMIT 0');await client.query('SELECT sealed FROM nft_console.workspace_drafts LIMIT 0');await client.query('SELECT body FROM nft_console.workspace_chunks LIMIT 0');await client.query('ROLLBACK');}
   catch(error){try{await client.query('ROLLBACK');}catch(cause){broken=cause;}throw error;}
   finally{client.release(broken);}
 }
