@@ -17,3 +17,17 @@ html { touch-action: manipulation; }
 @media (max-width: 600px) {
   .field input, .field textarea, .field select { font-size: 16px; }
 }
+
+/* NFT-36 polish: visible focus on every interactive element, reduced motion,
+   and readable small labels. */
+textarea:focus-visible, select:focus-visible, summary:focus-visible, [role=button]:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
+.skip-link { color: var(--ink); font-weight: 600; box-shadow: 0 2px 12px #0d252a33; }
+.sidebar-build { font-size: 10px; color: #c9d8c7; }
+.eyebrow { color: #46604f; }
+.chain-setup h1 { font-size: 32px; line-height: 1.2; margin: 0 0 18px; }
+.chain-setup h1:focus { outline: none; }
+.chain-setup code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; background: #eef2ea; border: 1px solid #d6dfd0; border-radius: 4px; padding: 1px 5px; overflow-wrap: anywhere; }
+.setup-steps { padding-left: 1.4rem; line-height: 1.7; font-size: 14px; }
+.setup-steps li { margin-bottom: 10px; }
+.setup-optional { font-size: 13px; line-height: 1.7; padding-left: 1.2rem; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
