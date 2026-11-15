@@ -7,8 +7,9 @@ Source of truth: docs/DEVELOPMENT_PLAN.md, registry/prs.json, exact-head PR chec
 The repository now lives at Galinsky-Arts/NFT-Minting-Console. Merged today:
 
 - **#64** production dependency audit fixed (multer 2.5.0, body-parser 1.20.9, follow-redirects 1.16.3, qs 6.16.2) and registry/image identity moved to Galinsky-Arts (`ghcr.io/galinsky-arts/nft-minting-console`).
-- **#63** consolidated completion: Seaport 1.6 / OpenSea listing core with independent verification, Limit Break v5 transfer-policy workflow (ruleset 255 / options 6), client-encrypted private workspace (Argon2id, Ed25519 root, MLS device keys, recovery, resumable encrypted storage) and Safe 1.4.1 support for policy and listing actions. Its CI was fixed (Safe suite now compiles the console contracts first). Chosen over the overlapping **#62**, which was closed; #62's unique pieces are being ported separately. **#59** (NFT-10) was closed as superseded and **#19** (CircleCI) as obsolete.
+- **#63** consolidated completion: Seaport 1.6 / OpenSea listing core with independent verification, Limit Break v5 transfer-policy workflow (ruleset 255 / options 6), client-encrypted private workspace (Argon2id, Ed25519 root, MLS device keys, recovery, resumable encrypted storage) and Safe 1.4.1 support for policy and listing actions. Its CI was fixed (Safe suite now compiles the console contracts first). Chosen over the overlapping **#62**, which was closed; #62's unique pieces were ported in #67. **#59** (NFT-10) was closed as superseded and **#19** (CircleCI) as obsolete.
 - **#58** NFT-14 minimal public collector-receipt boundary.
+- **#66** registry/progress refresh; **#67** live collection inventory and offline solc hook ported from #62.
 - **#65** degraded *chain not configured* runtime mode when `RPC_URL` is unset, plus `npm run db:provision-runtime` for the restricted login.
 
 Deployment: Render `srv-dbsvpavf3r2c73bha9mg` at https://nft-minting-console.onrender.com on Neon project `silent-resonance-77956314` (Sepolia, migrations 001-009, restricted runtime login). It runs degraded until the owner supplies `RPC_URL`; see `docs/DEPLOYMENT_RENDER_NEON_20261115.md`.
