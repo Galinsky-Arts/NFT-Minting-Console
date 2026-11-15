@@ -10,13 +10,19 @@ import {canonicalOrigin} from './auth/core.mjs';
 import {databaseOptions,GuardedDatabasePool} from './data/pool.mjs';
 import {InstallationStore,SetupError} from './setup/store.mjs';
 import {installSetupRoutes} from './setup/http.mjs';
+import {createTelemetry,statusReport} from './telemetry/status.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const registry=JSON.parse(readFileSync(path.join(root,'config/chains.json'),'utf8'));
 /** Boot the normal app only after a durable, proof-of-control administrator claim.
  * An unclaimed installation exposes only the setup UI, not an unauthenticated admin API. */
 export async function createRuntime({env=process.env,testDependencies}={}){
   if(testDependencies&&env.NODE_ENV!=='test')throw new Error('Runtime dependency injection is test-only.');
-  if(env.NFT_SETUP_ENABLED!=='1')return createApp({env});
+  if(env.NFT_SETUP_ENABLED!=='1'){
+    const inner=createApp({env}),telemetry=createTelemetry(),id=Number(env.CHAIN_ID),outer=express();outer.disable('x-powered-by');
+    outer.use(telemetry.middleware);
+    outer.get('/api/status',(_req,res)=>{res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.json(statusReport({telemetry,env,chainId:id,chainName:registry.chains[String(id)]?.name??null,mode:'active',databaseVerified:Boolean(env.DATABASE_URL),setupRequired:false}));});
+    outer.use(inner);outer.locals=inner.locals;return outer;
+  }
   if(['ADMIN_WALLETS','EDITOR_WALLETS','VIEWER_WALLETS'].some(key=>env[key]?.trim()))throw new Error('Use either browser enrollment or explicit environment wallet roles, not both.');
   if(env.DATABASE_URL_UNPOOLED)throw new Error('Migration credentials must not be present in the application environment.');
   const production=env.NODE_ENV==='production',origin=canonicalOrigin(env.PUBLIC_ORIGIN,production),chainId=Number(env.CHAIN_ID),profile=registry.chains[String(chainId)];
@@ -47,7 +53,7 @@ export async function createRuntime({env=process.env,testDependencies}={}){
     if((await provider.getNetwork()).chainId!==BigInt(chainId))throw new Error('The configured RPC network does not match CHAIN_ID.');
     const owner=await store.owner();
     if(!owner&&!/^[a-f0-9]{64}$/.test(env.NFT_SETUP_CODE||''))throw new Error('Set a randomly generated 64-character NFT_SETUP_CODE in the hosting environment.');
-    const app=hardenedApp(origin);
+    const telemetry=createTelemetry(),app=hardenedApp(origin,telemetry);
     const setup=express();setup.disable('x-powered-by');
     installSetupRoutes(setup,{store,provider,origin,chainId,setupCode:env.NFT_SETUP_CODE,onClaimed:activate});
     setup.get('/api/config',(_req,res)=>res.json({chainId,chainName:profile.name,production:profile.production,productionReady:false,loginConfigured:false,pinningConfigured:Boolean(env.PINATA_JWT),authStore:'postgresql',capabilities:{opaqueReleaseApi:false,deploy:false,mintJournal:false,localMint:false,publicLaunch:false}}));
@@ -59,6 +65,7 @@ export async function createRuntime({env=process.env,testDependencies}={}){
     app.use(async(req,res,next)=>{
       try{
         const registered=await activate();
+        if(req.path==='/api/status'&&req.method==='GET')return res.json(statusReport({telemetry,env,chainId,chainName:profile.name,mode:registered?'active':'setup',databaseVerified:true,setupRequired:!registered}));
         if(req.path==='/api/setup/status'&&req.method==='GET')return res.json({version:1,required:!registered,chainId,chainName:profile.name,databaseVerified:true,codeConfigured:!registered&&Boolean(env.NFT_SETUP_CODE),runtimeReady:registered,fullProductReady:false});
         (active||setup)(req,res,next);
       }catch{res.status(503).json({code:'installation_unavailable',error:'The installation database or runtime could not be verified. No development-memory fallback is permitted.'});}
@@ -69,8 +76,9 @@ export async function createRuntime({env=process.env,testDependencies}={}){
     await app.locals.ready;return app;
   }catch(error){provider.destroy?.();await pool.end();throw error;}
 }
-function hardenedApp(origin){
+function hardenedApp(origin,telemetry){
   const app=express();app.disable('x-powered-by');app.set('trust proxy',false);
+  if(telemetry)app.use(telemetry.middleware);
   app.use((_req,res,next)=>{
     res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('Cross-Origin-Resource-Policy','same-origin');
     res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
@@ -89,7 +97,8 @@ async function createChainUnconfiguredRuntime({env,testDependencies,origin,chain
   try{
     const registered=Boolean(await store.owner());
     const blocker='The blockchain RPC connection (RPC_URL) is not configured. Administrator registration, sign-in, minting and marketplace features stay disabled until the operator sets an HTTPS RPC_URL for this network.';
-    const app=hardenedApp(origin);
+    const telemetry=createTelemetry(),app=hardenedApp(origin,telemetry);
+    app.get('/api/status',(_req,res)=>res.json(statusReport({telemetry,env,chainId,chainName:profile.name,mode:'degraded',databaseVerified:true,setupRequired:!registered})));
     app.get('/api/health',(_req,res)=>res.json({ok:true,degraded:true,chainConfigured:false,setupRequired:!registered,productionReady:false}));
     app.get('/api/setup/status',(_req,res)=>res.json({version:1,required:!registered,chainId,chainName:profile.name,databaseVerified:true,codeConfigured:!registered&&/^[a-f0-9]{64}$/.test(env.NFT_SETUP_CODE||''),runtimeReady:false,fullProductReady:false,chainConfigured:false}));
     app.get('/api/config',(_req,res)=>res.json({chainId,chainName:profile.name,production:profile.production,productionReady:false,chainConfigured:false,loginConfigured:false,pinningConfigured:false,authStore:'postgresql',capabilities:{opaqueReleaseApi:false,deploy:false,mintJournal:false,localMint:false,publicLaunch:false}}));

@@ -15,12 +15,30 @@ export function SetupGate({children}:{children:ReactNode}){
   if(status?.chainConfigured===false)return <ChainNotConfigured status={status}/>;
   return status?.required?<SetupWizard status={status}/>:children;
 }
-/** Degraded hosting: the database is verified but no RPC endpoint is configured, so nothing chain-bound can run. */
+/** Degraded hosting: the database is verified but no RPC endpoint is configured, so nothing chain-bound can run.
+ * Tells the owner exactly which hosting variable to add, then how to finish registration. */
+interface Blocked { action: string; envVar: string; need: string }
 function ChainNotConfigured({status}:{status:SetupStatus}){
-  return <main id="main-content" tabIndex={-1} className="main-content setup-wizard"><span className="eyebrow">INSTALLATION NOT READY</span><h1>Blockchain connection not configured</h1>
-    <Notice>This installation is running in a limited mode. The hosting operator has not set <strong>RPC_URL</strong>, so administrator registration, sign-in, minting and marketplace features are disabled. No wallet request or transaction can be made from this page.</Notice>
-    <section className="panel"><h2>Installation status</h2><dl className="preview-grid"><div><dt>Site</dt><dd>{location.origin}</dd></div><div><dt>Network</dt><dd className="network-badge">{status.chainName} / {status.chainId}</dd></div><div><dt>Database</dt><dd>{status.databaseVerified?'Restricted database verified':'Database setup required'}</dd></div><div><dt>Administrator</dt><dd>{status.required?'Not registered yet':'Registered'}</dd></div></dl>
-      <p>To finish setup, add an HTTPS JSON-RPC endpoint for {status.chainName} as <strong>RPC_URL</strong> in the hosting service's private environment settings. The service restarts automatically; then reload this page{status.required?' and register your administrator wallet with the NFT_SETUP_CODE value from the same settings page':''}.</p></section>
+  const heading=useRef<HTMLHeadingElement>(null),[blocked,setBlocked]=useState<Blocked[]>([]),[copied,setCopied]=useState('');
+  useEffect(()=>{heading.current?.focus();const c=new AbortController();api('/api/status',{signal:c.signal}).then(v=>{const list=(v as {blockedActions?:unknown}).blockedActions;if(!c.signal.aborted&&Array.isArray(list))setBlocked(list.filter((b):b is Blocked=>!!b&&typeof b.envVar==='string'&&/^[A-Z_]{1,40}$/.test(b.envVar)&&typeof b.action==='string'&&typeof b.need==='string').slice(0,10));}).catch(()=>{});return()=>c.abort();},[]);
+  const copy=async(name:string)=>{try{await navigator.clipboard.writeText(name);setCopied(`Copied ${name}.`);}catch{setCopied(`Copy failed. Type ${name} manually.`);}};
+  const optional=blocked.filter(b=>b.envVar!=='RPC_URL');
+  return <main id="main-content" tabIndex={-1} className="main-content setup-wizard chain-setup"><span className="eyebrow">INSTALLATION NOT READY</span><h1 ref={heading} tabIndex={-1}>Blockchain connection not configured</h1>
+    <Notice>This installation is running in a limited mode because the hosting environment variable <code>RPC_URL</code> is not set. Administrator registration, sign-in, minting and marketplace features are disabled. No wallet request or transaction can be made from this page.</Notice>
+    <section className="panel" aria-labelledby="fix-heading"><h2 id="fix-heading">Add RPC_URL to finish setup</h2>
+      <ol className="setup-steps">
+        <li>Get an HTTPS JSON-RPC endpoint for <strong>{status.chainName}</strong> (chain ID {status.chainId}) from an Ethereum node provider such as Alchemy or Infura. Use the full URL, starting with <code>https://</code>.</li>
+        <li>Open your hosting dashboard. On Render: <strong>nft-minting-console</strong> service, then <strong>Environment</strong>, then <strong>Add Environment Variable</strong>.</li>
+        <li>Enter the key <code>RPC_URL</code> <button type="button" className="text-button" onClick={()=>void copy('RPC_URL')} aria-label="Copy name RPC_URL">Copy name</button> and paste the endpoint as its value. Keep it private; it is never shown in this interface.</li>
+        <li>Save. The service restarts automatically. Then reload this page.</li>
+        {status.required&&<li>Register your administrator wallet: enter the value of <code>NFT_SETUP_CODE</code> from the same Environment page when this site asks for the installation setup code.</li>}
+      </ol>
+      <p role="status" aria-live="polite" className="muted">{copied}</p>
+      <button type="button" className="button primary" onClick={()=>location.reload()}>Reload after saving</button>
+    </section>
+    <section className="panel" aria-labelledby="status-heading"><h2 id="status-heading">Installation status</h2><dl className="preview-grid"><div><dt>Site</dt><dd>{location.origin}</dd></div><div><dt>Network</dt><dd className="network-badge">{status.chainName} / {status.chainId}</dd></div><div><dt>Database</dt><dd>{status.databaseVerified?'Restricted database verified':'Database setup required'}</dd></div><div><dt>Administrator</dt><dd>{status.required?'Not registered yet':'Registered'}</dd></div></dl>
+      {optional.length>0&&<><h3>Also not configured (optional for now)</h3><ul className="setup-optional">{optional.map(b=><li key={b.envVar}><code>{b.envVar}</code>: {b.need}. Needed for: {b.action}.</li>)}</ul></>}
+    </section>
     <footer className="workspace-footer">NFT Console / Development build. Limited mode is not an operational or security readiness claim.</footer>
   </main>;
 }
