@@ -1,10 +1,10 @@
 import {getAddress} from 'ethers/address';
 import {setupMessage} from '../../setup/message.mjs';
-export interface SetupStatus {version:1;required:boolean;chainId:number;chainName:string;databaseVerified:boolean;codeConfigured:boolean;runtimeReady:boolean;fullProductReady:false}
+export interface SetupStatus {version:1;required:boolean;chainId:number;chainName:string;databaseVerified:boolean;codeConfigured:boolean;runtimeReady:boolean;fullProductReady:false;chainConfigured?:boolean}
 export interface SetupChallenge {version:1;challengeId:string;message:string;issuedAt:string;expiresAt:string}
 export function readSetupStatus(input:unknown):SetupStatus {
   const v=input as Partial<SetupStatus>|null;
-  if(!v||v.version!==1||typeof v.required!=='boolean'||![1,11155111,31337].includes(v.chainId as number)||typeof v.chainName!=='string'||v.chainName.length>80||v.databaseVerified!==true||typeof v.codeConfigured!=='boolean'||typeof v.runtimeReady!=='boolean'||v.fullProductReady!==false)throw new Error('The installation status could not be verified.');
+  if(!v||v.version!==1||typeof v.required!=='boolean'||![1,11155111,31337].includes(v.chainId as number)||typeof v.chainName!=='string'||v.chainName.length>80||v.databaseVerified!==true||typeof v.codeConfigured!=='boolean'||typeof v.runtimeReady!=='boolean'||v.fullProductReady!==false||(v.chainConfigured!==undefined&&typeof v.chainConfigured!=='boolean'))throw new Error('The installation status could not be verified.');
   return v as SetupStatus;
 }
 export function readSetupChallenge(input:unknown,expected:{origin:string;wallet:string;chainId:number},now=Date.now()):SetupChallenge {

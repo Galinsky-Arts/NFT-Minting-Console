@@ -12,7 +12,17 @@ export function SetupGate({children}:{children:ReactNode}){
   useEffect(()=>{const c=new AbortController();api('/api/setup/status',{signal:c.signal}).then(v=>{if(!c.signal.aborted)setStatus(readSetupStatus(v));}).catch(e=>{if(c.signal.aborted)return;if(e instanceof ApiError&&e.status===404)setStatus(null);else setError('The installation could not be checked. Reload after the service is available.');});return()=>c.abort();},[]);
   if(error)return <main id="main-content" tabIndex={-1} className="main-content"><h1>Installation check unavailable</h1><Notice error>{error}</Notice><button className="button primary" onClick={()=>location.reload()}>Reload</button></main>;
   if(status===undefined)return <main id="main-content" tabIndex={-1} className="main-content"><p role="status">Checking installation...</p></main>;
+  if(status?.chainConfigured===false)return <ChainNotConfigured status={status}/>;
   return status?.required?<SetupWizard status={status}/>:children;
+}
+/** Degraded hosting: the database is verified but no RPC endpoint is configured, so nothing chain-bound can run. */
+function ChainNotConfigured({status}:{status:SetupStatus}){
+  return <main id="main-content" tabIndex={-1} className="main-content setup-wizard"><span className="eyebrow">INSTALLATION NOT READY</span><h1>Blockchain connection not configured</h1>
+    <Notice>This installation is running in a limited mode. The hosting operator has not set <strong>RPC_URL</strong>, so administrator registration, sign-in, minting and marketplace features are disabled. No wallet request or transaction can be made from this page.</Notice>
+    <section className="panel"><h2>Installation status</h2><dl className="preview-grid"><div><dt>Site</dt><dd>{location.origin}</dd></div><div><dt>Network</dt><dd className="network-badge">{status.chainName} / {status.chainId}</dd></div><div><dt>Database</dt><dd>{status.databaseVerified?'Restricted database verified':'Database setup required'}</dd></div><div><dt>Administrator</dt><dd>{status.required?'Not registered yet':'Registered'}</dd></div></dl>
+      <p>To finish setup, add an HTTPS JSON-RPC endpoint for {status.chainName} as <strong>RPC_URL</strong> in the hosting service's private environment settings. The service restarts automatically; then reload this page{status.required?' and register your administrator wallet with the NFT_SETUP_CODE value from the same settings page':''}.</p></section>
+    <footer className="workspace-footer">NFT Console / Development build. Limited mode is not an operational or security readiness claim.</footer>
+  </main>;
 }
 function SetupWizard({status}:{status:SetupStatus}){
   const wallets=useWallets(),[code,setCode]=useState(''),[choice,setChoice]=useState<WalletChoice|null>(null),[wallet,setWallet]=useState(''),[challenge,setChallenge]=useState<SetupChallenge|null>(null),[approved,setApproved]=useState(false),[busy,setBusy]=useState(''),[error,setError]=useState(''),[registered,setRegistered]=useState(false);
