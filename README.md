@@ -2,8 +2,8 @@
 
 A general-purpose workspace for independent NFT collections, using this project's custom ERC-721C-compatible collection family. Not an Androids Of The Vine-only product.
 
-> **Public browser workflows are implemented; full product and live installation acceptance remain distinct.**
-> Browser administrator enrollment, final public file publication, exact-byte readback, configuration presets, total-cost review, wallet deployment/minting and transaction recovery are implemented. Check the exact PR head and deployment evidence before relying on a particular build. Private encrypted workspaces, large resumable transfers, complete validator-policy provisioning and automated marketplace listing remain unfinished. Development labeling is not removed merely because code deploys or NODE_ENV changes. No user mint, active listing or security certification is claimed here.
+> **Status (2026-11-15): feature-complete for automated acceptance; live operation awaits owner credentials.**
+> Browser administrator enrollment, public publication with exact readback, cost review, wallet deployment/minting and recovery, the client-encrypted private workspace (devices, recovery, resumable encrypted files), transfer-policy provisioning and Seaport/OpenSea listing with independent verification (EOA and Safe) are implemented and pass CI. The hosted Sepolia instance at https://nft-minting-console.onrender.com runs in a degraded *chain not configured* mode until `RPC_URL` is set ([deployment record](docs/DEPLOYMENT_RENDER_NEON_20261115.md)). No user mint, active listing, live marketplace sale or security certification is claimed; external review is deferred.
 
 ## First-run administrator registration
 
@@ -21,7 +21,7 @@ The [total-cost panel](docs/PRE_MINT_COST_REVIEW.md) starts a read-only full-rel
 
 Preparing each immutable deployment/mint plan now automatically runs the independent wallet-RPC simulation and fee review, in addition to server-side verification. Deployment and minting still require a separate explicit fee approval and wallet signature. The server does not hold signing keys or broadcast user transactions. Receipt verification and durable recovery remain mandatory. Additional NFTs in the same collection use its verified existing contract, not another deployment. See the [automatic rehearsal guide](docs/AUTOMATIC_MINT_REHEARSAL.md) for the exact-snapshot, safety, and provider-support limits.
 
-This public workflow does not implement encrypted private drafts, legal approval, large resumable transfers or marketplace listing. Limits and acceptance evidence are in the linked documents.
+This public workflow is separate from the encrypted private workspace and the Marketplace page; legal approval of rights terms remains the owner's. Limits and acceptance evidence are in the linked documents.
 
 ## Help and reusable configurations
 
@@ -68,6 +68,6 @@ Start with the [Product Charter](docs/PRODUCT_CHARTER.md), [36-work-package plan
 
 Names, supply, wallet roles, royalties, artwork and rights are independently chosen per collection. Deployed immutable economics and finalized token fields cannot be rewritten by loading a preset. Never restore validator-wide automatic approval or a seizure path. Public IPFS is not private encrypted storage. A mint is not an active order; a URL is not proof of a listing; signing in is not asset-transfer approval.
 
-The [client attachment component](docs/CLIENT_ATTACHMENT_CRYPTO.md) supplies chunked AEAD and hashes but does not by itself complete device authorization, key delivery, recovery or encrypted workspace storage. See the [threat model](docs/THREAT_MODEL.md), [privacy inventory](docs/PRIVACY_INVENTORY.md), [applicability/profile](docs/E2EESA_APPLICABILITY.md) and [scoped status](security/e2eesa-status.json).
+The [client attachment component](docs/CLIENT_ATTACHMENT_CRYPTO.md) supplies chunked AEAD and hashes; the private workspace (`console/crypto/workspace.mjs`, `console/workspace/`) adds device authorization, MLS key delivery, recovery and ciphertext-only storage. See the [threat model](docs/THREAT_MODEL.md), [privacy inventory](docs/PRIVACY_INVENTORY.md), [applicability/profile](docs/E2EESA_APPLICABILITY.md) and [scoped status](security/e2eesa-status.json).
 
 Under [AGENTS.md](AGENTS.md), independent human/external review is deferred, not a development or deployment prerequisite. Implementing agents perform source/security review and applicable tests, fix real defects and retain source-bound evidence. Failed checks and actual vulnerabilities still block merge. Neither assistant review nor record integrity is independent certification. Run `python3 scripts/validate_e2eesa_status.py` for the status record, not as a substitute for acceptance testing.
