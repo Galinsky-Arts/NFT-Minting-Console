@@ -15,10 +15,11 @@ test('chain-not-configured installation explains the RPC_URL fix accessibly and 
   await expect(page.getByRole('region',{name:'Installation status'})).toContainText('Restricted database verified');
   await expect(page.getByText('PINATA_JWT')).toBeVisible();
   await expect(page.getByRole('button',{name:/Connect|Register|Sign in/})).toHaveCount(0);
-  // Keyboard: skip link first, then the copy and reload controls are reachable in order.
-  await page.keyboard.press('Tab');await expect(page.getByRole('link',{name:'Skip to main content'})).toBeFocused();
+  // Keyboard: from the focused heading, Tab reaches the copy and reload controls; Shift+Tab returns through them to the skip link.
   await page.keyboard.press('Tab');await expect(page.getByRole('button',{name:'Copy name RPC_URL'})).toBeFocused();
   await page.keyboard.press('Tab');await expect(page.getByRole('button',{name:'Reload after saving'})).toBeFocused();
+  await page.keyboard.press('Shift+Tab');await expect(page.getByRole('button',{name:'Copy name RPC_URL'})).toBeFocused();
+  await page.keyboard.press('Shift+Tab');await expect(page.getByRole('link',{name:'Skip to main content'})).toBeFocused();
   expect((await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa']).analyze()).violations).toEqual([]);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const status=await page.evaluate(async()=>(await fetch('/api/status')).json()) as {mode:string;blockedActions:{envVar:string}[]};
