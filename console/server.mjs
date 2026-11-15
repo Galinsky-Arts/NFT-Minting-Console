@@ -23,6 +23,7 @@ import {ListingService,checkMarketplaceSchema} from './marketplace/listing-servi
 import {installMarketplaceRoutes} from './marketplace/listing-http.mjs';
 import {createOpenSea} from './marketplace/opensea.mjs';
 import {installPolicyRoutes} from './marketplace/transfer-policy-http.mjs';
+import {installCollectionRoutes} from './collections/inventory.mjs';
 import {WorkspaceService} from './workspace/service.mjs';
 import {installWorkspaceRoutes} from './workspace/http.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -76,6 +77,7 @@ export function createApp({env=process.env,authService,launchContentOptions}={})
   if(launchJournal){installLaunchRoutes(app,requireAction,{journal:launchJournal,provider,artifact:launchArtifact,enabled:publicLaunch,chainId,contentOptions:launchContentOptions});installCostQuoteRoutes(app,requireAction,{journal:launchJournal,provider,artifact:launchArtifact,enabled:publicLaunch,chainId,contentOptions:launchContentOptions});}
   if(listings)installMarketplaceRoutes(app,requireAction,listings);
   installPolicyRoutes(app,requireAction,{provider,chainId,profile,env});
+  installCollectionRoutes(app,requireAction,{provider,chainId});
   if(persistence)installWorkspaceRoutes(app,requireAction,new WorkspaceService(persistence.repository));
   if(launchJournal&&env.PINATA_JWT)installPublicationWorkbench(app,requireAction,{repository:persistence.repository,jwt:env.PINATA_JWT,contentOptions:launchContentOptions});
   app.get('/api/config',(_req,res)=>res.json({chainId,chainSlug:profile.slug,chainName:profile.name,production:profile.production,deploymentFactory:factoryAddress,pinningReady:false,pinningConfigured:Boolean(env.PINATA_JWT),loginConfigured:roles.size>0&&Boolean(provider),validator:env.TRANSFER_VALIDATOR_ADDRESS||profile.validator,signedZone:env.OPENSEA_SIGNED_ZONE||profile.signedZone,productionReady:false,authStore:persistence?'postgresql':'development-memory',capabilities:{publicPublication:Boolean(launchJournal&&env.PINATA_JWT),publicLaunch,localMint,mintJournal:Boolean(persistence),privateDrafts:false,opaqueReleaseApi:Boolean(persistence),publish:false,mint:false,list:false,deploy:chainId!==1&&Boolean(factoryAddress)}}));

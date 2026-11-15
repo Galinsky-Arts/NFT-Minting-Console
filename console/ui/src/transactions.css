@@ -21,3 +21,5 @@
 .recovery-code{font-size:1.15rem;letter-spacing:.06em;padding:.75rem 1rem;border:1px dashed var(--line,#c9ced8);border-radius:8px;display:inline-block;user-select:all}
 .private-workspace textarea{width:100%;font:inherit}
 .private-workspace label.button input[hidden]{display:none}
+.marketplace .table-scroll{overflow-x:auto;max-width:100%}
+.marketplace .table-scroll td.mono{word-break:break-all}
