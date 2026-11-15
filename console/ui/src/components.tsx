@@ -76,8 +76,10 @@ export function Modal({ title, children, close }: { title: string; children: Rea
 }
 export const navigation: { route: Route; label: string; icon: string }[] = [
   { route: 'releases', label: 'Collections', icon: 'grid' }, { route: 'create', label: 'Create release', icon: 'plus' },
+  { route: 'workspace', label: 'Private workspace', icon: 'lock' },
   { route: 'launch', label: 'Deploy & mint', icon: 'plus' },
   { route: 'transactions', label: 'Mint transactions', icon: 'layers' },
+  { route: 'marketplace', label: 'Marketplace', icon: 'wallet' },
   { route: 'readiness', label: 'Release readiness', icon: 'check' }, { route: 'settings', label: 'Workspace settings', icon: 'settings' },
 ];
 export function Navigation({ route, close }: { route: Route; close?: () => void }) {

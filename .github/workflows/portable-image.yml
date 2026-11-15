@@ -1,0 +1,45 @@
+name: Portable NFT Console image
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - .github/workflows/portable-image.yml
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - .github/workflows/portable-image.yml
+permissions:
+  contents: read
+  packages: write
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v3
+      - name: Authenticate for accepted release publishing only
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build complete Solidity + React browser console and publish immutable image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ghcr.io/galinsky-arts/nft-minting-console:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/Galinsky-Arts/NFT-Minting-Console
+            org.opencontainers.image.revision=${{ github.sha }}
+      - name: Record release boundary
+        run: echo 'Publishing this image does not deploy a host, authorize an Ethereum mint, or establish Pinata/RPC configuration.' >> "$GITHUB_STEP_SUMMARY"

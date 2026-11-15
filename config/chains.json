@@ -6,21 +6,43 @@
       "slug": "ethereum",
       "production": true,
       "validator": "0x721C008fdff27BF06E7E123956E2Fe03B63342e3",
-      "signedZone": "0x000056f7000000ece9003ca63978907a00ffd100"
-    },
-    "11155111": {
-      "name": "Ethereum Sepolia",
-      "slug": "sepolia",
-      "production": false,
-      "validator": null,
-      "signedZone": null
+      "signedZone": "0x000056f7000000ece9003ca63978907a00ffd100",
+      "marketplace": {
+        "name": "OpenSea",
+        "api": "opensea",
+        "apiChain": "ethereum",
+        "seaport": "0x0000000000000068F116a894984e2DB1123eB395",
+        "conduitKey": "0x0000007b02230091a7ed01230072f7006a004d60a8d4e71d599b8104250f0000",
+        "zone": "0x000056f7000000ece9003ca63978907a00ffd100"
+      }
     },
     "31337": {
       "name": "Hardhat",
       "slug": "hardhat",
       "production": false,
       "validator": null,
-      "signedZone": null
+      "signedZone": null,
+      "marketplace": {
+        "name": "Local Seaport (no marketplace)",
+        "api": null,
+        "seaport": null,
+        "conduitKey": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "zone": null
+      }
+    },
+    "11155111": {
+      "name": "Ethereum Sepolia",
+      "slug": "sepolia",
+      "production": false,
+      "validator": null,
+      "signedZone": null,
+      "marketplace": {
+        "name": "Seaport order book only (OpenSea does not index Sepolia)",
+        "api": null,
+        "seaport": "0x0000000000000068F116a894984e2DB1123eB395",
+        "conduitKey": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "zone": null
+      }
     }
   }
 }
