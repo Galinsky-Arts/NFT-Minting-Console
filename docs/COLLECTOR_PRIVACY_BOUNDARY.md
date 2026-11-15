@@ -1,7 +1,8 @@
 # NFT-14: public collector receipt minimization increment
 
 The client-only console/privacy/collector.mjs function rejects any object carrying
-own fields beyond chainId, contract, tokenId and transactionHash, including\nnon-enumerable and symbol-keyed fields. It rejects inherited
+own fields beyond chainId, contract, tokenId and transactionHash, including
+non-enumerable and symbol-keyed fields. It rejects inherited
 prototypes, accessor properties, invalid identifiers and out-of-range uint256 token
 IDs. The returned chain receipt is immutable. No storage, collector registration,
 network, analytics, personal contacts or consent is implemented or enabled.
