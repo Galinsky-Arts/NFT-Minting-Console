@@ -5,6 +5,7 @@ import type { Configuration, Session } from './model';
 import type { WalletProvider } from './auth';
 import { Icon, Notice, SignInPrompt } from './components';
 import { TransferPolicy } from './TransferPolicy';
+import { CollectionInventory } from './CollectionInventory';
 import { ListingFlowError, sendAndConfirm, signOrder, type TypedOrder, type WalletTransaction } from './marketplace-wallet';
 
 interface Payment { role: string; label: string; recipient: string; amountWei: string; bps?: number }
@@ -102,6 +103,7 @@ function MarketplaceWorkspace({ current, config, expired, walletProvider }: Prop
     {!owner && <Notice>Only the collection owner role can create or manage listings. You can view this page but not sign orders.</Notice>}
     {error && <Notice error>{error}</Notice>}
     {status && <p role="status" className="loading">{status}</p>}
+    <CollectionInventory expired={expired}/>
     {owner && <TransferPolicy current={current} walletProvider={walletProvider} expired={expired}/>}
     {owner && <section className="panel" aria-labelledby="new-listing">
       <div className="section-heading"><div><span className="eyebrow">NEW LISTING</span><h2 id="new-listing">List a minted NFT for sale</h2></div></div>

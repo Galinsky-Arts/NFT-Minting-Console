@@ -54,6 +54,12 @@ const listingRow=(page:Page,tokenId:string)=>page.locator('.transaction-row').fi
 test('owner configures the real transfer policy, lists, observes a real sale and cancels another order',async({page},info)=>{
   test.setTimeout(120_000);
   const {collection}=await setup(page,info.project.name==='mobile');
+  // 0. Read-only live inventory of the deployed collection (immutable settings and minted works).
+  const inventory=page.locator('section').filter({has:page.getByRole('heading',{name:'Collection inventory'})});
+  await inventory.getByLabel('Collection contract').fill(collection);
+  await inventory.getByRole('button',{name:'Read collection'}).click();
+  await expect(inventory.getByRole('table')).toBeVisible({timeout:30_000});
+  await expect(inventory.getByRole('row').filter({hasText:'#1'})).toBeVisible();
   // 1. Transfer policy: every step is a wallet transaction followed by on-chain readback.
   const policy=page.locator('section').filter({has:page.getByRole('heading',{name:'Marketplace transfer policy'})});
   await policy.getByLabel('Collection contract').fill(collection);
