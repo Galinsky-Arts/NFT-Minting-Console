@@ -37,9 +37,9 @@ jobs:
           context: .
           file: ./Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ghcr.io/neophilism/nft-minting-console:sha-${{ github.sha }}
+          tags: ghcr.io/galinsky-arts/nft-minting-console:sha-${{ github.sha }}
           labels: |
-            org.opencontainers.image.source=https://github.com/neophilism/NFT-Minting-Console
+            org.opencontainers.image.source=https://github.com/Galinsky-Arts/NFT-Minting-Console
             org.opencontainers.image.revision=${{ github.sha }}
       - name: Record release boundary
         run: echo 'Publishing this image does not deploy a host, authorize an Ethereum mint, or establish Pinata/RPC configuration.' >> "$GITHUB_STEP_SUMMARY"

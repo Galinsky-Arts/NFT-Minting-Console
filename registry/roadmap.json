@@ -1,5 +1,5 @@
 {
-  "repository": "neophilism/NFT-Minting-Console",
+  "repository": "Galinsky-Arts/NFT-Minting-Console",
   "deprecated": true,
   "redirectTo": "registry/prs.json",
   "instructions": "Retired duplicate. Read and edit registry/prs.json exclusively for Boardroom and Engine Room; this file contains no active milestones or PR mappings."
