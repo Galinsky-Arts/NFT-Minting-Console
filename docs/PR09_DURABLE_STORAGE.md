@@ -79,7 +79,10 @@ GRANT nft_console_api, nft_console_auth_service, nft_console_identity
 ```
 
 Set the password in the provider's secure role-management flow, never in GitHub
-or chat. Give the app only this restricted connection as `DATABASE_URL`. Do not
+or chat. `npm run db:provision-runtime` performs exactly these statements from an
+operations environment holding both `DATABASE_URL_UNPOOLED` (migration owner)
+and the app's `DATABASE_URL` (runtime login, whose password it applies); it
+refuses a non-restricted existing login or unexpected memberships. Give the app only this restricted connection as `DATABASE_URL`. Do not
 provide the migration credential, ACL-reader membership, schema ownership or
 additional grants. The app rejects `DATABASE_URL_UNPOOLED` in its environment.
 

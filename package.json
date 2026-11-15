@@ -25,6 +25,7 @@
     "test:auth:postgres": "node scripts/test-native-postgres.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "db:migrate:auth": "node scripts/migrate-auth.mjs",
+    "db:provision-runtime": "node scripts/provision-runtime-role.mjs",
     "auth:policy": "node scripts/rotate-auth-policy.mjs",
     "security:profiles": "python3 scripts/check_security_profiles.py",
     "test:security-profiles": "python3 -m unittest discover -s test-security -v",

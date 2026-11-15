@@ -22,6 +22,7 @@ export async function createRuntime({env=process.env,testDependencies}={}){
   const production=env.NODE_ENV==='production',origin=canonicalOrigin(env.PUBLIC_ORIGIN,production),chainId=Number(env.CHAIN_ID),profile=registry.chains[String(chainId)];
   if(!profile||(!production&&env.NODE_ENV!=='test')||(chainId===31337&&env.NODE_ENV!=='test'))throw new Error('Browser enrollment requires an explicit supported production or test environment.');
   if(production&&(env.NFT_PUBLIC_LAUNCH!=='1'||(chainId===1&&env.NFT_MAINNET_ACK!=='ethereum-mainnet-real-fees')))throw new Error('Configure the public launch scope before administrator enrollment.');
+  if(!String(env.RPC_URL??'').trim())return createChainUnconfiguredRuntime({env,testDependencies,origin,chainId,profile});
   let rpc;try{rpc=new URL(env.RPC_URL);}catch{throw new Error('Configure RPC_URL before enabling browser enrollment.');}
   if(rpc.username||rpc.password||(!['https:'].includes(rpc.protocol)&&!(env.NODE_ENV==='test'&&rpc.origin.startsWith('http://127.0.0.1:'))))throw new Error('Use an HTTPS RPC URL.');
   let pool=testDependencies?.pool;
@@ -46,12 +47,7 @@ export async function createRuntime({env=process.env,testDependencies}={}){
     if((await provider.getNetwork()).chainId!==BigInt(chainId))throw new Error('The configured RPC network does not match CHAIN_ID.');
     const owner=await store.owner();
     if(!owner&&!/^[a-f0-9]{64}$/.test(env.NFT_SETUP_CODE||''))throw new Error('Set a randomly generated 64-character NFT_SETUP_CODE in the hosting environment.');
-    const app=express();app.disable('x-powered-by');app.set('trust proxy',false);
-    app.use((_req,res,next)=>{
-      res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('Cross-Origin-Resource-Policy','same-origin');
-      res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
-      if(origin.startsWith('https:'))res.setHeader('Strict-Transport-Security','max-age=31536000');next();
-    });
+    const app=hardenedApp(origin);
     const setup=express();setup.disable('x-powered-by');
     installSetupRoutes(setup,{store,provider,origin,chainId,setupCode:env.NFT_SETUP_CODE,onClaimed:activate});
     setup.get('/api/config',(_req,res)=>res.json({chainId,chainName:profile.name,production:profile.production,productionReady:false,loginConfigured:false,pinningConfigured:Boolean(env.PINATA_JWT),authStore:'postgresql',capabilities:{opaqueReleaseApi:false,deploy:false,mintJournal:false,localMint:false,publicLaunch:false}}));
@@ -72,6 +68,39 @@ export async function createRuntime({env=process.env,testDependencies}={}){
     app.locals.close=async()=>{closed=true;await activating?.catch(()=>{});await active?.locals.close?.();provider.destroy?.();await pool.end();};
     await app.locals.ready;return app;
   }catch(error){provider.destroy?.();await pool.end();throw error;}
+}
+function hardenedApp(origin){
+  const app=express();app.disable('x-powered-by');app.set('trust proxy',false);
+  app.use((_req,res,next)=>{
+    res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('Cross-Origin-Resource-Policy','same-origin');
+    res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+    if(origin.startsWith('https:'))res.setHeader('Strict-Transport-Security','max-age=31536000');next();
+  });
+  return app;
+}
+/** Clearly degraded start when the operator has not supplied RPC_URL yet.
+ * The restricted database is still verified, but administrator enrollment, sign-in and every chain or
+ * marketplace route stay closed: proof-of-control registration needs the RPC network/code checks, and
+ * nothing may fall back to an unverified chain view. /api/health reports degraded:true. */
+async function createChainUnconfiguredRuntime({env,testDependencies,origin,chainId,profile}){
+  let pool=testDependencies?.pool;
+  if(!pool){const raw=new pg.Pool(databaseOptions(env.DATABASE_URL));raw.on('error',()=>console.error('Installation database connection failed.'));pool=new GuardedDatabasePool(raw);}
+  const store=testDependencies?.store||new InstallationStore({pool,origin,chainId});
+  try{
+    const registered=Boolean(await store.owner());
+    const blocker='The blockchain RPC connection (RPC_URL) is not configured. Administrator registration, sign-in, minting and marketplace features stay disabled until the operator sets an HTTPS RPC_URL for this network.';
+    const app=hardenedApp(origin);
+    app.get('/api/health',(_req,res)=>res.json({ok:true,degraded:true,chainConfigured:false,setupRequired:!registered,productionReady:false}));
+    app.get('/api/setup/status',(_req,res)=>res.json({version:1,required:!registered,chainId,chainName:profile.name,databaseVerified:true,codeConfigured:!registered&&/^[a-f0-9]{64}$/.test(env.NFT_SETUP_CODE||''),runtimeReady:false,fullProductReady:false,chainConfigured:false}));
+    app.get('/api/config',(_req,res)=>res.json({chainId,chainName:profile.name,production:profile.production,productionReady:false,chainConfigured:false,loginConfigured:false,pinningConfigured:false,authStore:'postgresql',capabilities:{opaqueReleaseApi:false,deploy:false,mintJournal:false,localMint:false,publicLaunch:false}}));
+    app.use('/api',(_req,res)=>res.status(503).json({code:'chain_not_configured',error:blocker}));
+    app.use(express.static(path.join(root,'console/dist')));
+    app.get('/',(_req,res)=>res.status(503).type('text/plain').send(blocker));
+    app.locals.degraded=true;app.locals.ready=Promise.resolve(registered);
+    app.locals.close=async()=>{await pool.end();};
+    console.warn('NFT Console started in degraded mode: RPC_URL is not configured, so enrollment, sign-in and chain features are disabled.');
+    return app;
+  }catch(error){await pool.end();throw error;}
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){
   let app;
