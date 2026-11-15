@@ -79,7 +79,7 @@ for(const port of [4175,4176]){
   const runtime=await createRuntime({env:{NODE_ENV:'test',NFT_SETUP_ENABLED:'1',NFT_SETUP_CODE:'f'.repeat(64),NFT_PUBLIC_LAUNCH:'1',NFT_UI_FIXTURE:'1',PUBLIC_ORIGIN:`http://127.0.0.1:${port}`,CHAIN_ID:'31337',RPC_URL:rpcUrl,DATABASE_URL:database.runtimeUrl}});
   const instance=runtime.listen(port,'127.0.0.1');await once(instance,'listening');setupServers.push({runtime,instance});
 }
-for(const port of [4177,4178]){
+for(const port of [4185,4186]){
   // Hosted installation before the owner supplies RPC_URL: limited "chain not configured" mode on the real restricted database.
   const runtime=await createRuntime({env:{NODE_ENV:'test',NFT_SETUP_ENABLED:'1',NFT_SETUP_CODE:'e'.repeat(64),NFT_PUBLIC_LAUNCH:'1',PUBLIC_ORIGIN:`http://127.0.0.1:${port}`,CHAIN_ID:'31337',DATABASE_URL:database.runtimeUrl}});
   const instance=runtime.listen(port,'127.0.0.1');await once(instance,'listening');setupServers.push({runtime,instance});

@@ -3,7 +3,7 @@ import AxeBuilder from '@axe-core/playwright';
 // NFT-36: a hosted installation without RPC_URL tells the owner exactly which variable to add, is keyboard
 // operable and accessible, and exposes no wallet action.
 test('chain-not-configured installation explains the RPC_URL fix accessibly and offers no wallet action',async({page},info)=>{
-  const origin=`http://127.0.0.1:${info.project.name==='mobile'?4178:4177}`;
+  const origin=`http://127.0.0.1:${info.project.name==='mobile'?4186:4185}`;
   let walletCalls=0;await page.exposeFunction('__walletCall',()=>{walletCalls++;});
   await page.addInitScript(()=>{(window as unknown as {ethereum:unknown}).ethereum={request:async()=>{await (window as unknown as {__walletCall:()=>Promise<void>}).__walletCall();return [];},on(){},removeListener(){}};});
   await page.goto(origin);
