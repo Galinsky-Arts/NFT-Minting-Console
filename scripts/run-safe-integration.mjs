@@ -7,4 +7,6 @@ function run(command, args, capture = false) {
 }
 if (run('git', ['-C', 'vendor/safe', 'rev-parse', 'HEAD'], true) !== PIN) throw new Error('Safe source must match the reviewed v1.4.1 pin.');
 if (run('git', ['-C', 'vendor/safe', 'status', '--porcelain'], true)) throw new Error('Safe source must be clean.');
+// The Safe marketplace/policy suite deploys the console's own collection and test validator artifacts.
+run(process.execPath, ['node_modules/hardhat/internal/cli/cli.js', 'compile']);
 run(process.execPath, ['node_modules/hardhat/internal/cli/cli.js', 'test', '--config', 'test-safe/config.cjs']);
