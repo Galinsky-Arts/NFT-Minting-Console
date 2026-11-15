@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "repository": "neophilism/NFT-Minting-Console",
+  "repository": "Galinsky-Arts/NFT-Minting-Console",
   "kind": "web-app",
   "monitoring": {
     "mode": "inventory"

@@ -2,7 +2,7 @@ import type {Route} from './model.ts';
 export interface TutorialStep {title:string;body:string;route:Route;target:string;link?:{label:string;url:string}}
 export interface Tutorial {id:string;title:string;summary:string;steps:TutorialStep[]}
 const step=(title:string,body:string,route:Route,target='#main-content',link?:TutorialStep['link']):TutorialStep=>({title,body,route,target,...(link?{link}:{})});
-const docs='https://github.com/neophilism/NFT-Minting-Console/blob/main/';
+const docs='https://github.com/Galinsky-Arts/NFT-Minting-Console/blob/main/';
 export const tutorials:Tutorial[]=[
   {id:'administrator',title:'Administrator Setup',summary:'Set up wallets, hosting, database, RPC, publication credentials and the live launch checks.',steps:[
     step('Collect public wallet addresses','Register the first administrator in the installation screen: copy NFT_SETUP_CODE from your existing Render Environment settings, connect your wallet, review the registration message, and sign it only after approving the administrator role. You do not need to send an address in chat. Owner, minter and royalty wallets are separate collection settings chosen after sign-in. Use a direct Ethereum account for this first-mint flow; never enter a seed phrase or private key.','settings','#installation-code, .wallet-button',{label:'Browser-first installation instructions',url:docs+'docs/BROWSER_INSTALLATION.md'}),
