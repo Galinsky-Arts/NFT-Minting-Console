@@ -5,7 +5,7 @@
 # NFT Console — Complete Development & Handoff Plan
 
 **Status:** Approved *scope proposal* / implementation plan; individual PRs are not marked complete until verified.  
-**Repository:** https://github.com/neophilism/NFT-Minting-Console  
+**Repository:** https://github.com/Galinsky-Arts/NFT-Minting-Console  
 **Authoritative security specification:** https://github.com/neophilism/End-To-End-Everywhere-Security-Architecture-Standard  
 **Plan revision:** 2026-10-10, initial baseline.
 **Independent handoff companion files:** [Recovered Decisions & Context](HANDOFF_CONTEXT.md) · [Completeness Audit / Blockers](HANDOFF_STATUS.md) · [Frozen Original Contract and Rights](../reference/androids-of-the-vine/). Read these before PR-01; they preserve design constraints from earlier discussions that were not fully described in the 36-PR list.  
