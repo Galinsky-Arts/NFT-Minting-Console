@@ -1,0 +1,37 @@
+name: Neon backup branch
+on:
+  schedule:
+    - cron: '41 3 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: neon-backup
+  cancel-in-progress: false
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: silent-resonance-77956314
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+      - name: Skip until the owner adds the NEON_API_KEY repository secret
+        if: env.NEON_API_KEY == ''
+        run: echo "::notice::NEON_API_KEY secret is not set; weekly backup skipped. See docs/BACKUP_AND_ALERTS.md."
+      - name: Create a dated backup branch of production and verify it
+        if: env.NEON_API_KEY != ''
+        run: |
+          node scripts/neon-backup.mjs snapshot --label weekly > snapshot.json && cat snapshot.json
+          name="$(node -p "require('./snapshot.json').backupBranchName")"
+          node scripts/neon-backup.mjs verify "$name"
+          node scripts/neon-backup.mjs schema-check "$name"
+      - name: Keep the newest four weekly backups (other branches are never pruned)
+        if: env.NEON_API_KEY != ''
+        run: node scripts/neon-backup.mjs prune --keep 4 --label weekly --confirm

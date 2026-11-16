@@ -9,7 +9,7 @@
   "packageManager": "npm@10.9.3",
   "scripts": {
     "build": "npm run compile && npm run check && npm run build:ui",
-    "ci": "npm run compile && npm run lint && npm run typecheck && npm test && npm run mint:rehearse && npm run test:crypto && npm run test:publication && npm run test:registry && npm run test:data && npm run test:auth && npm run test:ui:model && npm run security:scan && npm run build",
+    "ci": "npm run compile && npm run lint && npm run typecheck && npm test && npm run mint:rehearse && npm run test:crypto && npm run test:publication && npm run test:registry && npm run test:ops && npm run test:data && npm run test:auth && npm run test:ui:model && npm run security:scan && npm run build",
     "compile": "hardhat compile",
     "test": "hardhat test",
     "test:integration": "npm run compile && node scripts/run-validator-integration.mjs",
@@ -50,7 +50,11 @@
     "release:publish": "node scripts/publish-release.mjs publish",
     "release:reconcile": "node scripts/publish-release.mjs reconcile",
     "launch:doctor": "node scripts/launch-doctor.mjs",
-    "launch:budget": "node scripts/budget-launch.mjs"
+    "launch:budget": "node scripts/budget-launch.mjs",
+    "test:ops": "node --test test-ops/*.test.mjs",
+    "backup:snapshot": "node scripts/neon-backup.mjs snapshot",
+    "backup:list": "node scripts/neon-backup.mjs list",
+    "uptime:check": "node scripts/uptime-check.mjs"
   },
   "dependencies": {
     "@noble/ciphers": "2.1.1",

@@ -59,6 +59,8 @@ jobs:
         run: npm run test:publication
       - name: Verify canonical Boardroom and Engine Room PR registry
         run: npm run test:registry
+      - name: Verify backup and uptime operations scripts
+        run: npm run test:ops
       - name: Audit production dependencies
         run: npm run security:scan
       - name: Build application
