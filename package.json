@@ -55,7 +55,8 @@
     "test:ops": "node --test test-ops/*.test.mjs",
     "backup:snapshot": "node scripts/neon-backup.mjs snapshot",
     "backup:list": "node scripts/neon-backup.mjs list",
-    "uptime:check": "node scripts/uptime-check.mjs"
+    "uptime:check": "node scripts/uptime-check.mjs",
+    "docs:pdf": "node scripts/build-quickstart-pdf.mjs"
   },
   "dependencies": {
     "@noble/ciphers": "2.1.1",
