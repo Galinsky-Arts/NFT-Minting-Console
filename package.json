@@ -36,6 +36,7 @@
     "test:ui:browser": "playwright test -c playwright.config.ts",
     "test:ui": "npm run test:ui:model && npm run test:ui:browser",
     "mint:rehearse": "hardhat run scripts/rehearse-mints.cjs",
+    "rehearse:sepolia": "node scripts/rehearse-sepolia.mjs",
     "test:rights:aotv": "node --test test-rights/*.test.mjs",
     "rights:aotv:preflight": "node scripts/check-aotv-rights-release.mjs",
     "companion:aotv:generate": "node scripts/generate-aotv-schedules.mjs",
