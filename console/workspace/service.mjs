@@ -29,21 +29,32 @@ function device(v,root){
 const mls=v=>{if(typeof v!=='string'||!B64.test(v)||v.length>262144)bad('MLS_SHAPE');return v;};
 
 export class WorkspaceService{
-  constructor(repository){this.repository=repository;}
-  #tx(actor,fn){if(!['owner','editor'].includes(actor.role))throw new WorkspaceError(403,'FORBIDDEN','Private workspaces are available to owners and editors.');
-    return this.repository.transaction(actor,null,async(client,account)=>{await client.query("SET LOCAL statement_timeout = 20000");return fn(client,account);});}
+  /** @param objectStore optional S3-compatible chunk store; null keeps encrypted chunk bodies in PostgreSQL (default). */
+  constructor(repository,{objectStore=null,log=console}={}){this.repository=repository;this.objectStore=objectStore;this.logger=log;}
+  get storageDriver(){return this.objectStore?'s3':'postgres';}
+  /** Runs fn in the actor's transaction; object-store deletions queued in `after` run only once the rows are committed. */
+  async #tx(actor,fn){if(!['owner','editor'].includes(actor.role))throw new WorkspaceError(403,'FORBIDDEN','Private workspaces are available to owners and editors.');
+    const after=[];
+    const result=await this.repository.transaction(actor,null,async(client,account)=>{await client.query("SET LOCAL statement_timeout = 20000");return fn(client,account,after);});
+    for(const task of after){try{await task();}catch(error){this.logger.error(JSON.stringify({event:'workspace_object_cleanup_failed',message:String(error?.message||error).slice(0,200)}));}}
+    return result;}
+  #queuePrefixDeletes(after,account,objectIds){
+    if(!this.objectStore)return;
+    for(const id of objectIds)after.push(()=>this.objectStore.deletePrefix(this.objectStore.objectPrefix(account,id)));
+  }
   async #account(client,account,lock=false){
     const r=await client.query(`SELECT root_public_key,epoch,generation FROM nft_console.workspace_accounts WHERE account_id=$1${lock?' FOR UPDATE':''}`,[account]);
     return r.rows[0]||null;
   }
-  async #purge(client,account){
+  async #purge(client,account,after){
     await client.query('DELETE FROM nft_console.workspace_log WHERE account_id=$1 AND expires_at<clock_timestamp()',[account]);
     await client.query('DELETE FROM nft_console.workspace_drafts WHERE account_id=$1 AND expires_at<clock_timestamp()',[account]);
-    await client.query('DELETE FROM nft_console.workspace_objects WHERE account_id=$1 AND expires_at<clock_timestamp()',[account]);
+    const gone=await client.query('DELETE FROM nft_console.workspace_objects WHERE account_id=$1 AND expires_at<clock_timestamp() RETURNING object_id',[account]);
+    this.#queuePrefixDeletes(after,account,gone.rows.map(r=>r.object_id));
   }
-  async overview(actor){return this.#tx(actor,async(client,account)=>{
+  async overview(actor){return this.#tx(actor,async(client,account,after)=>{
     const w=await this.#account(client,account);if(!w)return {exists:false};
-    await this.#purge(client,account);
+    await this.#purge(client,account,after);
     const d=await client.query('SELECT device_id,certificate,label,status,created_at,updated_at FROM nft_console.workspace_devices WHERE account_id=$1 ORDER BY created_at',[account]);
     const drafts=await client.query('SELECT draft_id,revision,content_hash,updated_at,expires_at FROM nft_console.workspace_drafts WHERE account_id=$1 ORDER BY updated_at DESC LIMIT 200',[account]);
     const e=await client.query('SELECT device_id,signature_public_key,label,certificate IS NOT NULL AS certified,created_at FROM nft_console.workspace_enrollments WHERE account_id=$1 AND expires_at>clock_timestamp() ORDER BY created_at',[account]);
@@ -51,6 +62,7 @@ export class WorkspaceService{
       enrollments:e.rows.map(r=>({deviceId:r.device_id,signaturePublicKey:r.signature_public_key,label:r.label,certified:r.certified,createdAt:r.created_at})),
       devices:d.rows.map(r=>({deviceId:r.device_id,certificate:r.certificate,label:r.label,status:r.status,createdAt:r.created_at})),
       drafts:drafts.rows.map(r=>({draftId:r.draft_id,revision:r.revision,contentHash:r.content_hash,updatedAt:r.updated_at,expiresAt:r.expires_at})),
+      storage:this.storageDriver,
       retention:'Ciphertext expires 30 days after its last update. Keep your encrypted backup for longer-term recovery.'};
   });}
   /** First device: pins the account root (trust on first use) and becomes the sole MLS member at epoch 0. */
@@ -197,8 +209,9 @@ export class WorkspaceService{
   });}
   async createObject(actor,{objectId,chunkCount,chunkSize,ciphertextSize}){
     if(!ID.test(objectId)||!Number.isSafeInteger(chunkCount)||!Number.isSafeInteger(chunkSize)||!Number.isSafeInteger(ciphertextSize))bad('OBJECT_SHAPE');
-    return this.#tx(actor,async(client,account)=>{
+    return this.#tx(actor,async(client,account,after)=>{
       if(!await this.#account(client,account))missing();
+      await this.#purge(client,account,after);
       const used=await client.query('SELECT coalesce(sum(ciphertext_size),0)::bigint AS n FROM nft_console.workspace_objects WHERE account_id=$1 AND expires_at>clock_timestamp()',[account]);
       if(BigInt(used.rows[0].n)+BigInt(ciphertextSize)>5n*1024n**3n)conflict('STORAGE_QUOTA','The private workspace storage quota (5 GiB) would be exceeded.');
       const r=await client.query('INSERT INTO nft_console.workspace_objects(account_id,object_id,chunk_count,chunk_size,ciphertext_size) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING RETURNING object_id',[account,objectId,chunkCount,chunkSize,ciphertextSize]);
@@ -217,16 +230,45 @@ export class WorkspaceService{
   async putChunk(actor,objectId,index,body,claimedSha){
     if(!ID.test(objectId)||!Number.isSafeInteger(index)||index<0||!(body instanceof Uint8Array)||!body.length||body.length>8388624)bad('CHUNK_SHAPE');
     const sha=createHash('sha256').update(body).digest('hex');if(claimedSha!==sha)bad('CHUNK_HASH','The chunk bytes do not match their declared SHA-256.');
-    return this.#tx(actor,async(client,account)=>{
+    return this.#tx(actor,async(client,account,after)=>{
       const o=await client.query('SELECT chunk_count,chunk_size FROM nft_console.workspace_objects WHERE account_id=$1 AND object_id=$2 AND expires_at>clock_timestamp()',[account,objectId]);
       if(!o.rows[0])missing();if(index>=o.rows[0].chunk_count||body.length>o.rows[0].chunk_size+16)bad('CHUNK_RANGE');
-      const r=await client.query('INSERT INTO nft_console.workspace_chunks(account_id,object_id,chunk_index,sha256,body) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING RETURNING chunk_index',[account,objectId,index,sha,Buffer.from(body)]);
-      if(!r.rows.length){const cur=await client.query('SELECT sha256 FROM nft_console.workspace_chunks WHERE account_id=$1 AND object_id=$2 AND chunk_index=$3',[account,objectId,index]);if(cur.rows[0]?.sha256!==sha)conflict('CHUNK_CONFLICT');return {index,sha256:sha,duplicate:true};}
+      const existing=async()=>(await client.query('SELECT sha256 FROM nft_console.workspace_chunks WHERE account_id=$1 AND object_id=$2 AND chunk_index=$3',[account,objectId,index])).rows[0];
+      if(!this.objectStore){
+        const r=await client.query('INSERT INTO nft_console.workspace_chunks(account_id,object_id,chunk_index,sha256,body) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING RETURNING chunk_index',[account,objectId,index,sha,Buffer.from(body)]);
+        if(!r.rows.length){if((await existing())?.sha256!==sha)conflict('CHUNK_CONFLICT');return {index,sha256:sha,duplicate:true};}
+        return {index,sha256:sha};
+      }
+      const prior=await existing();
+      if(prior){if(prior.sha256!==sha)conflict('CHUNK_CONFLICT');return {index,sha256:sha,duplicate:true};}
+      const key=this.objectStore.chunkKey(account,objectId,index,sha);
+      await this.objectStore.put(key,body,sha);
+      const r=await client.query("INSERT INTO nft_console.workspace_chunks(account_id,object_id,chunk_index,sha256,body,storage) VALUES($1,$2,$3,$4,NULL,'s3') ON CONFLICT DO NOTHING RETURNING chunk_index",[account,objectId,index,sha]);
+      if(!r.rows.length){
+        if((await existing())?.sha256!==sha){after.push(()=>this.objectStore.delete(key));conflict('CHUNK_CONFLICT');}
+        return {index,sha256:sha,duplicate:true};
+      }
       return {index,sha256:sha};
     });
   }
   async getChunk(actor,objectId,index){if(!ID.test(objectId)||!Number.isSafeInteger(index))missing();return this.#tx(actor,async(client,account)=>{
-    const r=await client.query('SELECT c.body,c.sha256 FROM nft_console.workspace_chunks c JOIN nft_console.workspace_objects o USING(account_id,object_id) WHERE c.account_id=$1 AND c.object_id=$2 AND c.chunk_index=$3 AND o.expires_at>clock_timestamp()',[account,objectId,index]);
-    if(!r.rows[0])missing();return {body:new Uint8Array(r.rows[0].body),sha256:r.rows[0].sha256};
+    if(!this.objectStore){
+      const r=await client.query('SELECT c.body,c.sha256 FROM nft_console.workspace_chunks c JOIN nft_console.workspace_objects o USING(account_id,object_id) WHERE c.account_id=$1 AND c.object_id=$2 AND c.chunk_index=$3 AND o.expires_at>clock_timestamp()',[account,objectId,index]);
+      if(!r.rows[0])missing();return {body:new Uint8Array(r.rows[0].body),sha256:r.rows[0].sha256};
+    }
+    const r=await client.query('SELECT c.body,c.sha256,c.storage FROM nft_console.workspace_chunks c JOIN nft_console.workspace_objects o USING(account_id,object_id) WHERE c.account_id=$1 AND c.object_id=$2 AND c.chunk_index=$3 AND o.expires_at>clock_timestamp()',[account,objectId,index]);
+    const row=r.rows[0];if(!row)missing();
+    if(row.storage!=='s3')return {body:new Uint8Array(row.body),sha256:row.sha256};
+    const body=await this.objectStore.get(this.objectStore.chunkKey(account,objectId,index,row.sha256));
+    if(!body)throw new WorkspaceError(503,'CHUNK_MISSING','The encrypted chunk is missing from private object storage.');
+    if(createHash('sha256').update(body).digest('hex')!==row.sha256)throw new WorkspaceError(503,'CHUNK_INTEGRITY','The stored encrypted chunk failed its integrity check.');
+    return {body,sha256:row.sha256};
+  });}
+  /** Deletes an encrypted file: metadata immediately, object-store bodies right after the commit. */
+  async deleteObject(actor,objectId){if(!ID.test(objectId))missing();return this.#tx(actor,async(client,account,after)=>{
+    const r=await client.query('DELETE FROM nft_console.workspace_objects WHERE account_id=$1 AND object_id=$2 RETURNING object_id',[account,objectId]);
+    if(!r.rows.length)missing();
+    this.#queuePrefixDeletes(after,account,[objectId]);
+    return {deleted:true};
   });}
 }

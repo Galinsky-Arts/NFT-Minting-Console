@@ -28,6 +28,7 @@ export function installWorkspaceRoutes(app,requireAction,service){
   app.delete('/api/workspace/drafts/:id',requireAction('edit'),wrap(req=>service.deleteDraft(req.actor,req.params.id)));
   app.post('/api/workspace/objects',requireAction('edit'),wrap(req=>service.createObject(req.actor,req.body||{})));
   app.get('/api/workspace/objects/:id',requireAction('edit'),wrap(req=>service.objectStatus(req.actor,req.params.id)));
+  app.delete('/api/workspace/objects/:id',requireAction('edit'),wrap(req=>service.deleteObject(req.actor,req.params.id)));
   app.put('/api/workspace/objects/:id/chunks/:index',requireAction('edit'),raw,wrap(req=>service.putChunk(req.actor,req.params.id,Number(req.params.index),
     Buffer.isBuffer(req.body)?new Uint8Array(req.body.buffer,req.body.byteOffset,req.body.length):null,String(req.get('x-chunk-sha256')||''))));
   app.get('/api/workspace/objects/:id/chunks/:index',requireAction('edit'),async(req,res)=>{
