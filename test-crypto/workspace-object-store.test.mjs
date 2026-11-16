@@ -163,3 +163,29 @@ test('PostgreSQL driver keeps working after migration 010 (default path unchange
   assert.equal((await db.query('SELECT storage FROM nft_console.workspace_chunks')).rows[0].storage,'postgres');
   await svc.deleteObject(owner,objectId);await assert.rejects(svc.objectStatus(owner,objectId),{code:'NOT_FOUND'});
 });
+
+test('gigabyte-class encrypted file streams through the S3 driver with bounded server memory',async t=>{
+  // The fake keeps only each chunk's hash, so memory growth measures the server path, not the fake's storage.
+  const s3=await fakeS3();t.after(()=>s3.server.close());
+  const put=s3.objects.set.bind(s3.objects);s3.objects.set=(k,v)=>put(k,Buffer.from(sha(v)));
+  const db=new PGlite();await db.waitReady;t.after(()=>db.close());
+  await migrate(db);await migrateAuth(db);
+  await db.query('GRANT nft_console_api,nft_console_auth_service,nft_console_identity TO CURRENT_USER WITH INHERIT FALSE');
+  const repo=new ReleaseRepository({pool:new EmbeddedPool(db),knownRoles:()=>new Map([[OWNER,'owner']])});
+  const svc=new WorkspaceService(repo,{objectStore:new S3ObjectStore({endpoint:s3.endpoint,bucket:'private-chunks',region:'auto',accessKeyId:ACCESS,secretAccessKey:SECRET,allowInsecureLocal:true})});
+  const root=W.createAccountRoot(),A=await newDevice(root);
+  await svc.create(owner,{rootPublicKey:root.publicKey,device:register(A)});
+  const CHUNK=8*1024*1024,BODY=CHUNK+16,COUNT=127,objectId=W.newId();   // 127 x (8 MiB + GCM tag) = 0.99 GiB of ciphertext
+  await svc.createObject(owner,{objectId,chunkCount:COUNT,chunkSize:CHUNK,ciphertextSize:COUNT*BODY});
+  const body=randomBytes(BODY);globalThis.gc?.();const before=process.memoryUsage();let peak=0;
+  for(let i=0;i<COUNT;i++){
+    body.writeUInt32BE(i,0);   // distinct opaque ciphertext per chunk without allocating a new buffer
+    await svc.putChunk(owner,objectId,i,body,sha(body));
+    if(i%16===0){const m=process.memoryUsage();peak=Math.max(peak,m.rss-before.rss);}
+  }
+  assert.equal((await svc.objectStatus(owner,objectId)).complete,true);
+  assert.equal(s3.objects.size,COUNT);
+  t.diagnostic(`RSS growth over ${COUNT} chunks: ${Math.round(peak/1048576)} MiB`);
+  assert.ok(peak<384*1024*1024,`RSS growth ${Math.round(peak/1048576)} MiB stays far below the ~1 GiB file size`);
+  await svc.deleteObject(owner,objectId);assert.equal(s3.objects.size,0);
+});

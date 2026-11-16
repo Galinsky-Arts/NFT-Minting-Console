@@ -2,7 +2,21 @@
 
 Source of truth: docs/DEVELOPMENT_PLAN.md, registry/prs.json, exact-head PR checks and deployment evidence. A merged contribution is not automatic completion of its entire roadmap work package.
 
-## Current state - 2026-11-15
+## Current state - 2026-11-16
+
+Merged today (all with green local tests and GitHub Actions):
+
+- **#70 NFT-12** optional S3-compatible store for the client-encrypted workspace chunks (`PRIVATE_STORAGE_DRIVER=s3`, SigV4, no SDK). PostgreSQL stays the default; additive migration 010 is needed only before enabling S3. Hash-in-key writes, hash-checked reads, explicit deletion, 30-day retention purge of bucket objects. Tested against a signature-verifying in-process S3 fake; a 0.99 GiB (127 x 8 MiB) ciphertext upload grew server RSS by ~37 MiB (added with the status refresh). Not run against a real provider.
+- **#71 NFT-32** `scripts/neon-backup.mjs` (snapshot/list/verify/schema-check/restore-plan/label-scoped prune), weekly `neon-backup.yml` (needs `NEON_API_KEY` secret) and 6-hourly `uptime.yml` that opens/updates/closes an `uptime-alert` issue. Drill run once: backup branch `backup-2026-11-16-0058-drill` (`br-misty-hat-bce9ewq5`) from `main` at LSN 0/1DB4B48, ready, schema identical to production (38 tables). No destructive restore on production.
+- **#72 NFT-22** `npm run rehearse:sepolia`: full local Hardhat rehearsal, read-only Sepolia preflight when `RPC_URL` is set, factory deployment only through a loopback page signed by the owner's browser wallet, receipt recorder. Refuses to run with any private key or mnemonic in its environment.
+- **#73 NFT-36** `docs/OWNER_QUICKSTART.md` + `docs/OWNER_QUICKSTART.pdf` and `docs/HANDOFF.md`.
+- Registry, README and this file refreshed (status PR).
+
+Package status (honest): NFT-12 implementation complete, acceptance pending a real provider bucket (optional owner credentials). NFT-22 implementation complete, acceptance pending the owner's Sepolia run (RPC_URL, test ETH, wallet signatures). NFT-32 implementation complete, acceptance pending owner keys (`RPC_URL`, `PINATA_JWT`, `NEON_API_KEY` for scheduled backups) and live provider checks. NFT-33 not started: needs owner funds and a go/no-go. NFT-35 partial: Engine Room push needs an external account. NFT-36 implementation complete, acceptance pending a human nontechnical and screen-reader run.
+
+Remaining work is owner-gated only; see `docs/HANDOFF.md`. External human review remains deferred and no certification is claimed.
+
+## State - 2026-11-15
 
 The repository now lives at Galinsky-Arts/NFT-Minting-Console. Merged today:
 
